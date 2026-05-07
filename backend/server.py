@@ -56,6 +56,7 @@ async def healthz() -> dict:
 
 # Feature routers
 from auth import router as auth_router, seed_admin  # noqa: E402
+from passwordless import router as passwordless_router  # noqa: E402
 from doubts import router as doubts_router  # noqa: E402
 from payments import router as payments_router  # noqa: E402
 from chat import router as chat_router  # noqa: E402
@@ -64,6 +65,7 @@ from tutor_portal import router as tutor_router  # noqa: E402
 from seeds import seed_tutors  # noqa: E402
 
 api_router.include_router(auth_router)
+api_router.include_router(passwordless_router)
 api_router.include_router(doubts_router)
 api_router.include_router(payments_router)
 api_router.include_router(chat_router)
@@ -94,6 +96,10 @@ async def on_startup() -> None:
     await db.tutors.create_index("id", unique=True)
     await db.payment_transactions.create_index("session_id", unique=True)
     await db.tutor_applications.create_index("status")
+    # OTP and passkey challenges — TTL auto-cleanup
+    await db.otp_codes.create_index("expires_at", expireAfterSeconds=0)
+    await db.otp_codes.create_index("email")
+    await db.passkey_login_challenges.create_index("expires_at", expireAfterSeconds=0)
     await seed_admin(db)
     await seed_tutors(db)
     n = await db.tutors.count_documents({})

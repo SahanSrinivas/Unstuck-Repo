@@ -22,26 +22,32 @@ Build the marketing website and signed-in dashboard for **Unstuck** — a mobile
 ## What's Implemented (Feb 2026)
 
 ### Backend (`/app/backend/`)
-- `database.py` — shared MongoDB handle (eliminates circular imports)
-- `server.py` — main app, mounts routers, seeds admin + 8 tutors on startup
-- `auth.py` — register, login, logout, me, refresh; **PATCH /me** profile update; **POST /password** change password; bcrypt + JWT cookies
+- `database.py` — shared MongoDB handle
+- `server.py` — main app, Sentry init, slowapi limiter, mounts all routers, seeds admin + 8 tutors, TTL indexes for OTP/passkey challenges
+- `auth.py` — **legacy** email/password auth (admin escape hatch only); JWT version-rotation; bcrypt hashing
+- **`passwordless.py`** — Google OAuth, Email OTP (6-digit, 10-min TTL, hashed at rest), WebAuthn Passkeys (register/login begin+complete, list, delete)
 - `models.py` — Pydantic models
-- `doubts.py` — doubts CRUD, AI triage (Claude Sonnet 4.5), tutor matching, sessions, AI insight, **POST /sessions/{id}/resolve** (auto-refund flow), **/saved-tutors** GET/POST/DELETE, **GET /billing/transactions**
-- `payments.py` — Stripe checkout + status polling + webhook
-- **`chat.py` — WebSocket live chat at `/api/ws/sessions/{id}` with broadcast manager + `chat_messages` persistence + GET history endpoint + keyword-aware tutor canned replies**
+- `doubts.py` — doubts CRUD, AI triage (Claude Sonnet 4.5), tutor matching, sessions, AI insight, resolve/refund, saved-tutors, billing
+- `payments.py` — Stripe checkout + webhook auto-creates session
+- `chat.py` — WebSocket live chat with role-aware broadcast
+- `admin.py` — admin endpoints (applications, refunds, stats)
+- `tutor_portal.py` — tutor queue + sessions + profile
+- `email_service.py` — Resend wrapper with dummy-key no-op
+- `rate_limit.py` — shared slowapi limiter
 - `seeds.py` — 8 tutors + 4 tier definitions
 
 ### Frontend (`/app/frontend/src/`)
 - Tailwind config with Unstuck color tokens, Outfit/Inter/JetBrains Mono fonts
-- `pages/Home.jsx` — full marketing (8 sections per spec)
-- `pages/Login.jsx`, `Register.jsx`
-- `pages/Dashboard.jsx` — greeting, AI insight card, sessions table
-- `pages/dashboard/{ActiveSessions,History,SavedTutors,Billing,Settings}.jsx`
-- `pages/NewDoubt.jsx` — 3-step flow with stepper, **Monaco code editor** (Step 1), AI triage UI, tier selector + tutor cards, Stripe redirect
-- **`pages/Session.jsx` — live WebSocket chat with auto-scroll + "Live" indicator, per-session video iframe (Jitsi/configurable), Monaco shared code editor, timer, Resolution modal on End**
-- `pages/TutorApply.jsx`
-- `context/AuthContext.jsx` (memoized), `components/ProtectedRoute.jsx`
-- `components/marketing/*`, `components/dashboard/DashboardLayout.jsx`
+- Marketing: `/`, 8 sections per spec
+- **`pages/Login.jsx`** — passwordless: 3 tabs (Google · Email code · Passkey)
+- **`pages/GoogleCallback.jsx`** — handles `/auth/google?code=&state=`, exchanges with backend, stores session
+- `pages/Register.jsx` — redirects to Login email-code tab
+- Student dashboard: 6 routes
+- Tutor portal: 3 routes
+- Admin console: `/admin`
+- New Doubt 3-step flow with Monaco editor
+- Active session: WebSocket chat + Jitsi video iframe + Monaco shared editor + Resolve/Refund modal
+- **Settings → Passkey card** with `@simplewebauthn/browser` (add/remove passkeys, list registered ones, shows linked Google account)
 
 ### Verified by testing_agent_v3
 - **iteration_1**: 19/20 backend pass; full marketing + auth + new-doubt + session work
