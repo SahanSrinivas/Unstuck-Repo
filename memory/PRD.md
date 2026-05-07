@@ -46,13 +46,19 @@ Build the marketing website and signed-in dashboard for **Unstuck** — a mobile
 ### Verified by testing_agent_v3
 - **iteration_1**: 19/20 backend pass; full marketing + auth + new-doubt + session work
 - **iteration_2**: 14/14 new dashboard endpoints pass; Monaco + sidebar routes + refund flow verified
-- **iteration_3**: 15/15 new WebSocket/chat tests pass; 33/34 regression; live chat broadcast, persistence, canned replies, Jitsi iframe per-session URL all verified end-to-end
+- **iteration_3**: 15/15 new WebSocket/chat tests pass; live chat broadcast, persistence, canned replies, Jitsi iframe per-session URL all verified
+- **iteration_4**: 20/20 new tests pass — admin console, tutor portal, JWT rotation, rate limiting, Stripe webhook auto-create, Resend email no-op fallback, Sentry init. Full regression: 67/69 (2 known carry-overs).
+
+### Verified by deployment_agent
+- **status: PASS** — no deployment blockers. CORS valid, env-driven URLs, supervisor config valid, no hardcoded secrets, no ML/blockchain footguns, no malformed .env, no N+1 queries.
 
 ## Known Limitations (Feb 2026)
-1. **EMERGENT_LLM_KEY budget exhausted** at the time of build → AI triage falls back to a clean "AI unavailable, get a human" state. Top up → real Claude Sonnet 4.5 returns immediately.
-2. **Stripe payment status polling (502)** — Emergent's Stripe test-mode proxy occasionally returns 404 immediately after checkout creation. Real Stripe key would resolve.
-3. **Video provider is Jitsi**, not Daily.co — public Daily room URLs are not available without a Daily account/domain. Per-session rooms work via `https://meet.jit.si/unstuck-{session_id}`. Configurable via `REACT_APP_VIDEO_BASE_URL` so a Daily-hosted URL can be swapped in once a domain is provisioned.
-4. **WebSocket chat is single-pod**; horizontal scaling needs a Redis pub/sub adapter.
+1. **EMERGENT_LLM_KEY budget exhausted** — top up via Profile → Universal Key → Add Balance to unlock real Claude Sonnet 4.5 triage.
+2. **Stripe payment status polling 502** — Emergent's Stripe test-mode wrapper occasionally errors right after checkout creation. Real Stripe key resolves it.
+3. **Video provider is Jitsi**, not Daily.co — public Daily room URLs require a paid domain. Per-session Jitsi rooms work for free; swap `REACT_APP_VIDEO_BASE_URL` for Daily later.
+4. **WebSocket chat is single-pod** — set `REDIS_URL` and add a Redis pub/sub adapter for horizontal scale.
+5. **Rate limiter is in-memory** — multi-pod prod needs `REDIS_URL` to make slowapi share buckets.
+6. **Email + Sentry are dummy/empty** — replace `RESEND_API_KEY` and `SENTRY_DSN` for real send/observability.
 
 ## Backlog (P0 → P2)
 - **P0:** Top up LLM key (user action) → real Claude Sonnet 4.5 triage
