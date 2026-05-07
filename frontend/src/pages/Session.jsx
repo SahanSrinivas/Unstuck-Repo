@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Video, VideoOff, Send, Square, Clock, ArrowLeft, CheckCircle2, RotateCcw, X } from "lucide-react";
 import Editor from "@monaco-editor/react";
@@ -15,6 +15,8 @@ const SESSION_MONACO_OPTIONS = {
   padding: { top: 16, bottom: 16 },
   automaticLayout: true,
 };
+
+const VIDEO_BASE_URL = process.env.REACT_APP_VIDEO_BASE_URL || "https://meet.jit.si/unstuck-";
 
 function ResolutionModal({ open, onClose, onResolve, submitting }) {
   if (!open) return null;
@@ -68,6 +70,58 @@ function ResolutionModal({ open, onClose, onResolve, submitting }) {
   );
 }
 
+function VideoPanel({ on, onToggle, sessionId }) {
+  const roomUrl = `${VIDEO_BASE_URL}${sessionId}`;
+  return (
+    <div className="u-card !p-0 overflow-hidden h-[520px] flex flex-col" data-testid="video-panel">
+      <div className="flex-1 bg-ink relative">
+        {on ? (
+          <iframe
+            title="Video session room"
+            src={roomUrl}
+            allow="camera; microphone; fullscreen; speaker; display-capture; autoplay"
+            className="w-full h-full border-0"
+            data-testid="video-iframe"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-canvas">
+              <VideoOff size={48} strokeWidth={1.5} className="mx-auto opacity-50" />
+              <div className="u-small text-canvas mt-3 opacity-70">Video off</div>
+              <div className="u-caption text-canvas opacity-60 mt-1">Per-session room · ready to join</div>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="p-3 border-t border-line flex items-center gap-2">
+        <button
+          className={on ? "u-btn-secondary flex-1" : "u-btn-primary flex-1"}
+          onClick={onToggle}
+          data-testid="session-video-toggle"
+        >
+          {on ? (<><VideoOff size={16} strokeWidth={2} /> Stop video</>) : (<><Video size={16} strokeWidth={2} /> Start video</>)}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChatBubble({ msg }) {
+  const mine = msg.role === "you";
+  return (
+    <div className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`msg-${msg.id}`}>
+      <div className="max-w-[78%]">
+        {!mine && <div className="u-caption mb-1 ml-1">{msg.author || "Tutor"}</div>}
+        <div className={`rounded-md px-4 py-2.5 text-[14.5px] leading-6 whitespace-pre-wrap ${
+          mine ? "bg-purple-primary text-white" : "bg-canvas-alt text-ink"
+        }`}>
+          {msg.body}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Session() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -80,35 +134,70 @@ export default function Session() {
   const [modalOpen, setModalOpen] = useState(false);
   const [resolveErr, setResolveErr] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const wsRef = useRef(null);
   const timerRef = useRef(null);
+  const scrollRef = useRef(null);
 
+  // Load session metadata
   useEffect(() => {
     let cancelled = false;
     api.get(`/sessions/${id}`).then(({ data }) => {
       if (cancelled) return;
       setSession(data);
       setSecondsLeft(data.duration_min * 60);
-      setMessages([
-        { role: "tutor", body: `Hi — I'm ${data.tutor_name}. I read your doubt. Let's start with the chunker config you mentioned.`, ts: new Date().toISOString() },
-      ]);
     }).catch((e) => console.warn("session load failed", e));
     return () => { cancelled = true; };
   }, [id]);
 
+  // Connect WebSocket for live chat
+  useEffect(() => {
+    if (!id) return;
+    const backend = process.env.REACT_APP_BACKEND_URL || "";
+    const wsBase = backend.replace(/^http/, "ws");
+    const url = `${wsBase}/api/ws/sessions/${id}`;
+    const ws = new WebSocket(url);
+    wsRef.current = ws;
+
+    ws.onopen = () => setWsConnected(true);
+    ws.onclose = () => setWsConnected(false);
+    ws.onerror = (e) => console.warn("chat ws error", e);
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === "history") {
+          setMessages(data.messages || []);
+        } else if (data.type === "message" && data.message) {
+          setMessages((m) => (m.some((x) => x.id === data.message.id) ? m : [...m, data.message]));
+        }
+      } catch (err) {
+        console.warn("bad ws payload", err);
+      }
+    };
+
+    return () => {
+      try { ws.close(); } catch {/* noop */}
+    };
+  }, [id]);
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  // Countdown timer
   useEffect(() => {
     if (secondsLeft <= 0) return;
     timerRef.current = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(timerRef.current);
   }, [secondsLeft > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sendMsg = () => {
-    if (!input.trim()) return;
-    setMessages((m) => [...m, { role: "you", body: input, ts: new Date().toISOString() }]);
+  const sendMsg = useCallback(() => {
+    const body = input.trim();
+    if (!body || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({ body }));
     setInput("");
-    setTimeout(() => {
-      setMessages((m) => [...m, { role: "tutor", body: "Got it — try lowering chunk overlap to 64 and re-run recall@5.", ts: new Date().toISOString() }]);
-    }, 1200);
-  };
+  }, [input]);
 
   const handleResolve = async (resolution) => {
     setResolveErr("");
@@ -137,12 +226,19 @@ export default function Session() {
   return (
     <DashboardLayout>
       <div data-testid="session-page" className="max-w-6xl">
+        {/* top bar */}
         <div className="u-card flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex items-center gap-4">
             <Link to="/dashboard" className="text-ink-muted hover:text-purple-primary"><ArrowLeft size={18} strokeWidth={1.75} /></Link>
             <div>
               <div className="font-display font-semibold text-ink">{session.topic} with {session.tutor_name}</div>
-              <div className="u-caption">Session #{session.id.slice(0, 8)}</div>
+              <div className="u-caption flex items-center gap-2">
+                Session #{session.id.slice(0, 8)}
+                <span className={`inline-flex items-center gap-1 ${wsConnected ? "text-good" : "text-ink-soft"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? "bg-good" : "bg-ink-soft"}`} />
+                  {wsConnected ? "Live" : "Connecting…"}
+                </span>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -157,17 +253,14 @@ export default function Session() {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-5 mt-6">
+          {/* live chat */}
           <div className="lg:col-span-2 u-card !p-0 flex flex-col h-[520px]">
-            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4" data-testid="session-chat">
-              {messages.map((m, i) => (
-                <div key={`${m.ts}-${i}`} className={`flex ${m.role === "you" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[78%] rounded-md px-4 py-2.5 text-[14.5px] leading-6 ${
-                    m.role === "you" ? "bg-purple-primary text-white" : "bg-canvas-alt text-ink"
-                  }`}>
-                    {m.body}
-                  </div>
-                </div>
-              ))}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4" data-testid="session-chat">
+              {messages.length === 0 ? (
+                <div className="u-caption text-center mt-12">Connecting to your tutor…</div>
+              ) : (
+                messages.map((m) => <ChatBubble key={m.id} msg={m} />)
+              )}
             </div>
             <div className="border-t border-line p-3 flex gap-2">
               <input
@@ -175,37 +268,21 @@ export default function Session() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMsg()}
-                placeholder="Reply to your tutor…"
+                placeholder={wsConnected ? "Reply to your tutor…" : "Connecting…"}
+                disabled={!wsConnected}
                 data-testid="session-chat-input"
               />
-              <button className="u-btn-primary !px-4" onClick={sendMsg} data-testid="session-chat-send">
+              <button className="u-btn-primary !px-4" onClick={sendMsg} disabled={!wsConnected || !input.trim()} data-testid="session-chat-send">
                 <Send size={16} strokeWidth={2} />
               </button>
             </div>
           </div>
 
-          <div className="u-card !p-0 overflow-hidden h-[520px] flex flex-col">
-            <div className="flex-1 bg-ink relative flex items-center justify-center">
-              {videoOn ? (
-                <div className="text-center text-canvas">
-                  <Video size={48} strokeWidth={1.5} className="mx-auto opacity-80" />
-                  <div className="u-small text-canvas mt-3 opacity-90">Video panel (Daily.co iframe)</div>
-                </div>
-              ) : (
-                <div className="text-center text-canvas">
-                  <VideoOff size={48} strokeWidth={1.5} className="mx-auto opacity-50" />
-                  <div className="u-small text-canvas mt-3 opacity-70">Video off</div>
-                </div>
-              )}
-            </div>
-            <div className="p-3 border-t border-line">
-              <button className="u-btn-secondary w-full" onClick={() => setVideoOn(!videoOn)} data-testid="session-video-toggle">
-                {videoOn ? "Stop video" : "Start video"}
-              </button>
-            </div>
-          </div>
+          {/* Video — per-session room */}
+          <VideoPanel on={videoOn} onToggle={() => setVideoOn(!videoOn)} sessionId={id} />
         </div>
 
+        {/* code editor */}
         <div className="u-card mt-5 !p-0 overflow-hidden">
           <div className="px-5 py-3 border-b border-line flex items-center justify-between">
             <span className="font-display font-semibold text-ink text-[14px]">Shared editor</span>

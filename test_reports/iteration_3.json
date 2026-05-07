@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 3 testing: WebSocket live chat (/api/ws/sessions/{id}), REST history endpoint (/api/sessions/{id}/messages), canned-reply keyword logic, and per-session Jitsi iframe. Backend: 15/15 new pytest cases pass in /app/backend/tests/test_iteration3.py covering auth rejection, history+intro frame, two-connection broadcast, persistence, and 5 keyword-canned-reply parametrizations + default reply + REST 401/404. Regression: 33/34 (iteration_1 backend_test.py + iteration_2 test_iteration2.py); only the pre-existing /payments/status 502 (Emergent Stripe upstream — known carry-over from iter1) still fails. Frontend Playwright run end-to-end: login → create session via API → /sessions/{id} loads → WS connects (Live indicator green, chat input placeholder switches from 'Connecting…' to 'Reply to your tutor…') → tutor intro renders → Enter sends 'rag' message → canned reply with 'chunk overlap' arrives → send-button sends 'vllm' message → canned reply with 'continuous batching' arrives → chat auto-scrolls to bottom → Start video shows iframe whose src equals exactly 'https://meet.jit.si/unstuck-<sessionId>' → Stop video hides iframe → End opens resolution modal → all 5 sidebar routes navigate.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/ws/sessions/{id}", "issue": "When auth fails, chat.py calls ws.close(code=4401/4404) BEFORE ws.accept(). Starlette therefore returns HTTP 403 on the WS upgrade and the custom close codes (4401/4404) never reach the client. Functionally equivalent (rejection happens) but doesn't match the literal spec wording. To deliver 4401/4404 close codes, accept the socket first then close with the custom code."},
+      {"endpoint": "/api/payments/status/{session_id}", "issue": "Pre-existing 502 carry-over from iteration 1 (Emergent Stripe upstream). Not caused by iteration 3."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration3_results.xml"
+  ],
+  "action_items": [
+    "(Optional polish) chat.py: call `await ws.accept()` first, then `await ws.close(code=4401)` / `code=4404` so the documented close codes actually reach the websocket client (currently the upgrade is rejected with HTTP 403 — same effect, different wire behavior).",
+    "(Carry-over) Investigate /api/payments/status/{session_id} 502 from iteration 1."
+  ],
+  "critical_code_review_comments": [
+    "ConnectionManager is in-memory. Single-pod deploy only; if backend scales horizontally a Redis pub/sub layer (or socket.io adapter) is required so two browser sessions on different pods can exchange messages.",
+    "chat.py history sort uses string ts (ISO format). Works correctly because ISO-8601 sorts lexicographically, but if storage format ever changes (e.g., epoch ms), ordering will silently break. Consider using a numeric ts_ms field for sort.",
+    "chat.py:_user_from_ws does ObjectId(payload['sub']) without try/except — if a malformed token slips through, this raises bson.errors.InvalidId. The outer try/except catches it (returns None → 4401/403), so behavior is correct, just a logging-only concern.",
+    "list_messages REST endpoint correctly scopes to {user_id} via session ownership — confirmed test_messages_404_for_other_user passes (cross-user 404).",
+    "Frontend Session.jsx: WebSocket reconnect on close is not implemented; if the WS drops mid-session, the user is silently stuck on 'Connecting…'. Consider an exponential-backoff reconnect + visible 'Reconnecting…' state.",
+    "Frontend Session.jsx: messages are deduped by id when arriving via 'message' frames, but the 'history' frame replaces the array — if a client briefly disconnects and the server resends history, locally-pending unsent messages would be wiped. Edge case for an MVP."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3.py (new)"
+  ],
+  "success_rate": {"backend": "97% (48/49 — only pre-existing /payments/status 502)", "frontend": "100% on iteration-3 features (WS connect, Live indicator, intro, send-via-Enter, send-via-button, canned replies for rag+vllm, auto-scroll, Jitsi iframe src exact match, Stop hides iframe, resolution modal, all sidebar routes)."},
+  "test_credentials": "Admin admin@unstuck.dev / Admin123! (unchanged). New TEST_-prefixed students created during pytest runs (test.it3.* — ~10 students from parametrized canned-reply tests).",
+  "seed_data_creation": "~12 sessions + chat_messages rows created during testing (one for the UI flow s-e58c30a49a, plus ~10 per pytest parametrize for canned replies + 2 broadcast/history tests). All under TEST_ prefix students.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 3 fully verified. WebSocket testing uses the `websockets` Python package (already installed, v16.0). Pass cookies via `additional_headers={'Cookie': '...'}` (NOT `extra_headers` — that's the v12 API). Important behavioral note: chat.py rejects auth failures by calling `ws.close()` BEFORE `ws.accept()`, which Starlette translates to an HTTP 403 on the WS upgrade — so test for either websockets.exceptions.InvalidStatus(403) OR ConnectionClosed(4401/4404). Tutor intro is broadcast only on the FIRST connect (when chat_messages is empty); subsequent connects receive it inside the `history` frame, NOT as a separate `message` broadcast. Canned-reply substring is 'planner is over-thinking' (with 'is'), not 'planner over-thinking'. Frontend route is /sessions/:id (NOT /dashboard/session/:id).",
+  "rca_of_the_issue": "No production bugs found in iteration 3. The only minor protocol-level deviation is the WS auth-rejection wire format (HTTP 403 vs custom 4401/4404 close codes) — this is a chat.py implementation choice (close-before-accept) and is functionally equivalent for clients that just need to know the connection was rejected; documented under backend_issues.minor as an optional fix."
+}

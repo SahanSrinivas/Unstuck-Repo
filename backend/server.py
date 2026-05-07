@@ -32,11 +32,13 @@ async def healthz() -> dict:
 from auth import router as auth_router, seed_admin  # noqa: E402
 from doubts import router as doubts_router  # noqa: E402
 from payments import router as payments_router  # noqa: E402
+from chat import router as chat_router  # noqa: E402
 from seeds import seed_tutors  # noqa: E402
 
 api_router.include_router(auth_router)
 api_router.include_router(doubts_router)
 api_router.include_router(payments_router)
+api_router.include_router(chat_router)
 
 app.include_router(api_router)
 
