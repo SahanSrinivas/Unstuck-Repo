@@ -100,9 +100,10 @@ async def _run_triage(description: str, code: str, error_log: str, topics: list)
         from emergentintegrations.llm.chat import LlmChat, UserMessage
     except Exception:
         return {
-            "answer": "AI triage temporarily unavailable. A human tutor will pick this up.",
+            "answer": "AI triage is temporarily unavailable. A human tutor will pick this up.",
             "confidence": 0.0,
             "suggested_tier": "deep",
+            "error": True,
         }
 
     api_key = os.environ.get("EMERGENT_LLM_KEY", "")
@@ -122,11 +123,12 @@ async def _run_triage(description: str, code: str, error_log: str, topics: list)
 
     try:
         raw = await chat.send_message(user_msg)
-    except Exception as e:
+    except Exception:
         return {
-            "answer": f"AI triage failed: {str(e)[:120]}. Match with a human tutor.",
+            "answer": "The AI couldn't take a first attempt right now. Match with a human tutor and they'll pick it up.",
             "confidence": 0.0,
             "suggested_tier": "deep",
+            "error": True,
         }
 
     text = (raw or "").strip()
@@ -144,13 +146,15 @@ async def _run_triage(description: str, code: str, error_log: str, topics: list)
             "answer": str(data.get("answer", "")).strip() or "No answer generated.",
             "confidence": float(data.get("confidence", 0.5)),
             "suggested_tier": data.get("suggested_tier", "deep") if data.get("suggested_tier") in TIERS else "deep",
+            "error": False,
         }
     except Exception:
         # Fallback: return raw text with medium confidence
         return {
-            "answer": text[:1500] if text else "AI returned an empty response.",
-            "confidence": 0.55,
+            "answer": text[:1500] if text else "The AI returned an empty response. Match with a human tutor.",
+            "confidence": 0.55 if text else 0.0,
             "suggested_tier": "deep",
+            "error": not bool(text),
         }
 
 

@@ -154,6 +154,31 @@ function Step2({ doubtId, onResult, onBack }) {
     );
   }
 
+  // AI unavailable / errored — clean state, push the user toward a human
+  if (result.error || result.confidence === 0) {
+    return (
+      <div className="u-card max-w-3xl" data-testid="doubt-step-2-unavailable">
+        <span className="u-pill">AI is unavailable right now</span>
+        <h2 className="u-h3 mt-3">Let's get you a human directly.</h2>
+        <p className="u-body mt-3">
+          {result.answer || "Our AI couldn't take a first attempt this time."}
+        </p>
+        <div className="mt-6 flex gap-3">
+          <button className="u-btn-secondary" onClick={onBack} data-testid="ai-back">
+            Edit my doubt
+          </button>
+          <button
+            className="u-btn-primary"
+            onClick={() => onResult({ accepted: false, partial: false, suggested_tier: result.suggested_tier })}
+            data-testid="ai-skip-to-human"
+          >
+            Match me with a human <ArrowRight size={16} strokeWidth={2} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const confPct = Math.round(result.confidence * 100);
   const confColor = confPct >= 70 ? "text-good" : confPct >= 40 ? "text-warn" : "text-bad";
 

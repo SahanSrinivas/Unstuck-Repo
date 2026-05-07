@@ -46,6 +46,7 @@ class TriageResult(BaseModel):
     answer: str
     confidence: float
     suggested_tier: str  # quick | deep | working | project
+    error: bool = False
 
 
 class MatchRequest(BaseModel):
