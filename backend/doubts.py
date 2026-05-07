@@ -10,6 +10,7 @@ from typing import List
 from models import (
     DoubtCreate, DoubtPublic, TriageResult, MatchRequest,
     TutorPublic, TutorApplyRequest, SessionPublic,
+    ResolveSessionRequest, BillingItem,
 )
 from auth import get_current_user
 from seeds import TIERS
@@ -245,6 +246,79 @@ async def end_session(session_id: str, user: dict = Depends(get_current_user)):
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"ok": True}
+
+
+@router.post("/sessions/{session_id}/resolve")
+async def resolve_session(session_id: str, body: ResolveSessionRequest, user: dict = Depends(get_current_user)):
+    if body.resolution not in ("resolved", "refunded"):
+        raise HTTPException(status_code=400, detail="resolution must be 'resolved' or 'refunded'")
+    sess = await _db().sessions.find_one({"id": session_id, "user_id": user["_id"]}, {"_id": 0})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+    update = {
+        "status": "completed",
+        "resolution": body.resolution,
+        "summary": body.note or ("Marked resolved by student." if body.resolution == "resolved" else "Auto-refund requested."),
+    }
+    await _db().sessions.update_one({"id": session_id, "user_id": user["_id"]}, {"$set": update})
+    if body.resolution == "refunded":
+        # Mark any related payment txn as refunded (idempotent)
+        await _db().payment_transactions.update_many(
+            {"user_id": user["_id"], "doubt_id": sess["doubt_id"], "tier": sess["tier"]},
+            {"$set": {"refunded": True, "refunded_at": _now()}},
+        )
+    return {"ok": True, "resolution": body.resolution}
+
+
+# ---------- Saved tutors ----------
+@router.get("/saved-tutors", response_model=List[TutorPublic])
+async def list_saved(user: dict = Depends(get_current_user)):
+    docs = await _db().saved_tutors.find({"user_id": user["_id"]}, {"_id": 0}).to_list(100)
+    ids = [d["tutor_id"] for d in docs]
+    if not ids:
+        return []
+    tutors = await _db().tutors.find({"id": {"$in": ids}}, {"_id": 0}).to_list(100)
+    return [TutorPublic(**t) for t in tutors]
+
+
+@router.post("/saved-tutors/{tutor_id}")
+async def save_tutor(tutor_id: str, user: dict = Depends(get_current_user)):
+    tutor = await _db().tutors.find_one({"id": tutor_id}, {"_id": 0})
+    if not tutor:
+        raise HTTPException(status_code=404, detail="Tutor not found")
+    await _db().saved_tutors.update_one(
+        {"user_id": user["_id"], "tutor_id": tutor_id},
+        {"$set": {"user_id": user["_id"], "tutor_id": tutor_id, "saved_at": _now()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@router.delete("/saved-tutors/{tutor_id}")
+async def unsave_tutor(tutor_id: str, user: dict = Depends(get_current_user)):
+    await _db().saved_tutors.delete_one({"user_id": user["_id"], "tutor_id": tutor_id})
+    return {"ok": True}
+
+
+# ---------- Billing ----------
+@router.get("/billing/transactions", response_model=List[BillingItem])
+async def list_transactions(user: dict = Depends(get_current_user)):
+    cursor = _db().payment_transactions.find({"user_id": user["_id"]}, {"_id": 0}).sort("created_at", -1)
+    docs = await cursor.to_list(200)
+    out: List[BillingItem] = []
+    for d in docs:
+        out.append(BillingItem(
+            id=d.get("id", d.get("session_id", "")),
+            session_id=d.get("session_id"),
+            doubt_id=d.get("doubt_id"),
+            tier=d.get("tier"),
+            amount=float(d.get("amount", 0)),
+            currency=d.get("currency", "usd"),
+            payment_status=d.get("payment_status", "pending"),
+            created_at=d.get("created_at", ""),
+            refunded=bool(d.get("refunded", False)),
+        ))
+    return out
 
 
 # ---------- AI Insight (dashboard card) ----------

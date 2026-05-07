@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 2 testing covered the 5 new dashboard sub-routes (/dashboard/active, /history, /saved, /billing, /settings), 5 new backend endpoints (PATCH /auth/me, POST /auth/password, GET/POST/DELETE /saved-tutors, GET /billing/transactions, POST /sessions/{id}/resolve), Monaco editors in NewDoubt and Session, and the auto-refund resolution modal. Backend: 14/14 new pytest cases pass; iteration-1 regression still 19/20 (only the pre-existing /payments/status 502 remains — Emergent Stripe upstream). Frontend: all 5 sub-routes render with correct data-testids, all 5 sidebar NavLinks route to their own page, saved-tutors bookmark toggle works end-to-end, settings name update propagates to nav avatar after refresh(), wrong-password path shows 'Current password is incorrect' correctly, billing summary cards + table render, history rows show 'Resolved' / 'Refunded' chips, Monaco mounts in both NewDoubt Step 1 and Session.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/payments/status/{session_id}", "issue": "Pre-existing 502 from iteration 1 (Emergent Stripe upstream returns 404 for just-created checkout sessions). Not caused by this iteration."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_iteration2.py",
+    "/app/test_reports/pytest/iteration2_results.xml",
+    "/app/test_reports/pytest/iteration1_rerun.xml"
+  ],
+  "action_items": [
+    "(Carry-over from iteration 1) Investigate /api/payments/status/{session_id} 502 — likely Emergent Stripe proxy propagation; not blocking.",
+    "(Optional polish) In Settings.savePw the form value reset (`setCurrentPw('')`) only happens on success — fine, but consider also `await refresh()` after password change so the AuthContext is re-checked.",
+    "(Optional polish) In Settings.saveName, `refresh()` is called without `await`, so the avatar updates ~one tick after the success message. Avatar still updates correctly within ~1s; using `await refresh()` would make it instant."
+  ],
+  "critical_code_review_comments": [
+    "doubts.py::resolve_session matches payment txns by (user_id, doubt_id, tier) — works for the current schema, but if a user retries checkout for the same doubt+tier, ALL of those rows get marked refunded. Consider also constraining by latest payment_status='paid' or by the specific session_id stored on the txn.",
+    "auth.py::change_password does not invalidate existing JWTs after password change. Acceptable for an MVP, but a security hardening pass should rotate tokens / increment a per-user token-version claim.",
+    "DashboardLayout NAV uses `end: true` only for /dashboard root. Good — sub-routes correctly become non-active when on root and vice versa.",
+    "Settings.savePw calls api.post('/auth/password') without re-issuing /auth/me; OK because JWT is unchanged, but if you ever rotate JWTs on password change, frontend will silently 401 next request.",
+    "Saved-tutors endpoint correctly upserts (idempotent) and the UI re-fetches after toggle — verified working."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration2.py (new)"
+  ],
+  "success_rate": {"backend": "97% (33/34 — only pre-existing Stripe-status 502)", "frontend": "100% on iteration-2 features verified end-to-end (sidebar routing, saved-tutors toggle, settings name+avatar, wrong-pw error, billing render, session-end resolution modal, Monaco mount)."},
+  "test_credentials": "Admin: admin@unstuck.dev / Admin123! (DID NOT change). For pw-change tests, fresh students were registered via /api/auth/register (test.it2.* and test.fe2.* prefixes) and their passwords were rotated — those test users can be left or cleaned by an email-prefix sweep.",
+  "seed_data_creation": "Multiple TEST_-prefixed students (test.it2.*, test.fe2.*) plus a few doubts, sessions and payment_transactions rows were created during testing. Two sessions ended via the resolution modal (one Resolved, one Refunded) to validate the refund-marks-payment flow.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 2 features all verified. Backend pytest harness now has 2 files: backend_test.py (iteration 1 regression — 19/20 pass; only /payments/status is a known upstream issue) and test_iteration2.py (saved-tutors, billing, profile/password, resolve — 14/14 pass). The frontend Settings password 'success' path was hard to verify via Playwright due to controlled-input fill flakiness (the second `page.fill` for current_password sometimes doesn't propagate to React state on the first try, leading to a stale 400). Backend pytest already proves the endpoint works; if you re-test in browser, use page.locator(...).clear() before fill, or set the value via page.evaluate + dispatchEvent('input').",
+  "rca_of_the_issue": "No production bugs found in iteration 2. The /payments/status 502 carries over from iteration 1 (Emergent Stripe proxy). Frontend Settings password Playwright flake is test-side (controlled-input rerender timing), not a product defect — verified by passing backend pytest (test_change_password_success_and_login)."
+}

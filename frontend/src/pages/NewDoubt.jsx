@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Sparkles, Check, Clock, Star, Loader2 } from "lucide-react";
+import Editor from "@monaco-editor/react";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import { TIERS } from "../components/marketing/Pricing";
 import api, { formatApiErrorDetail } from "../lib/api";
@@ -53,14 +54,25 @@ function Step1({ value, onChange, onContinue }) {
         </div>
         <div>
           <label className="u-small font-medium text-ink block mb-1.5">Code (optional)</label>
-          <textarea
-            className="u-textarea min-h-[160px] font-mono text-[13.5px]"
-            placeholder={`# paste a snippet…\nretriever.search(query, k=5)`}
-            value={value.code}
-            onChange={(e) => onChange({ ...value, code: e.target.value })}
-            data-testid="doubt-code"
-            spellCheck={false}
-          />
+          <div className="rounded-md overflow-hidden border border-line" data-testid="doubt-code-editor">
+            <Editor
+              height="200px"
+              defaultLanguage="python"
+              value={value.code}
+              onChange={(v) => onChange({ ...value, code: v ?? "" })}
+              theme="vs-dark"
+              options={{
+                minimap: { enabled: false },
+                fontSize: 13,
+                fontFamily: "JetBrains Mono, monospace",
+                lineNumbers: "on",
+                scrollBeyondLastLine: false,
+                wordWrap: "on",
+                padding: { top: 12, bottom: 12 },
+                automaticLayout: true,
+              }}
+            />
+          </div>
         </div>
         <div>
           <label className="u-small font-medium text-ink block mb-1.5">Error log (optional)</label>

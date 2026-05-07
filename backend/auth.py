@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, Depends
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 
-from models import RegisterRequest, LoginRequest, UserPublic
+from models import RegisterRequest, LoginRequest, UserPublic, UpdateProfileRequest, ChangePasswordRequest
 
 JWT_ALGORITHM = "HS256"
 ACCESS_MIN = 60 * 24  # 1 day
@@ -182,6 +182,33 @@ async def refresh(request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Refresh expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@router.patch("/me", response_model=UserPublic)
+async def update_profile(body: UpdateProfileRequest, user: dict = Depends(get_current_user)):
+    db = get_db_dep()
+    await db.users.update_one(
+        {"_id": ObjectId(user["_id"])},
+        {"$set": {"name": body.name.strip()}},
+    )
+    user["name"] = body.name.strip()
+    return UserPublic(
+        id=user["_id"], email=user["email"], name=user["name"],
+        role=user.get("role", "student"), created_at=user.get("created_at", ""),
+    )
+
+
+@router.post("/password")
+async def change_password(body: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    db = get_db_dep()
+    full = await db.users.find_one({"_id": ObjectId(user["_id"])})
+    if not full or not verify_password(body.current_password, full.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    await db.users.update_one(
+        {"_id": ObjectId(user["_id"])},
+        {"$set": {"password_hash": hash_password(body.new_password)}},
+    )
+    return {"ok": True}
 
 
 async def seed_admin(db) -> None:

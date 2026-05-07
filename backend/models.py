@@ -21,6 +21,15 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class UpdateProfileRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6, max_length=128)
+
+
 class UserPublic(BaseModel):
     id: str
     email: str
@@ -101,8 +110,26 @@ class SessionPublic(BaseModel):
     duration_min: int
     price: float
     status: str  # scheduled | active | completed | cancelled
+    resolution: Optional[str] = None  # resolved | refunded | None
     created_at: str
     summary: Optional[str] = ""
+
+
+class ResolveSessionRequest(BaseModel):
+    resolution: str  # resolved | refunded
+    note: Optional[str] = ""
+
+
+class BillingItem(BaseModel):
+    id: str
+    session_id: Optional[str] = None
+    doubt_id: Optional[str] = None
+    tier: Optional[str] = None
+    amount: float
+    currency: str
+    payment_status: str
+    created_at: str
+    refunded: bool = False
 
 
 # ---------- Payments ----------
