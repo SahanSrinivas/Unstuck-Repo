@@ -113,7 +113,8 @@ async def seed_tutors(db):
 async def seed_test_tutor_user(db):
     """Seed a test tutor user (role=tutor, linked to tutor-aria) for end-to-end tutor-portal testing.
     Idempotent: only inserts if missing; never downgrades existing user."""
-    import os, bcrypt
+    import os
+    import bcrypt
     email = os.environ.get("TUTOR_TEST_EMAIL", "tutor.test@unstuck.dev").lower()
     password = os.environ.get("TUTOR_TEST_PASSWORD", "Tutor123!")
     tutor_id = "tutor-aria"

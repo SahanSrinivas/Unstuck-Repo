@@ -22,6 +22,7 @@ from email_service import (
 router = APIRouter(tags=["doubts"])
 
 _rng = secrets.SystemRandom()
+_background_tasks: set = set()  # strong refs to fire-and-forget asyncio tasks
 
 
 def _db():
@@ -300,7 +301,9 @@ async def resolve_session(session_id: str, body: ResolveSessionRequest, user: di
     else:
         # Resolved: kick off AI summary + email asynchronously so the API stays snappy.
         import asyncio
-        asyncio.create_task(_summarize_and_email(session_id, user, sess, body.note or ""))
+        task = asyncio.create_task(_summarize_and_email(session_id, user, sess, body.note or ""))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
     return {"ok": True, "resolution": body.resolution}
 
 

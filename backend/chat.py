@@ -138,7 +138,7 @@ async def session_chat(ws: WebSocket, session_id: str) -> None:
     ws._user_name = user.get("name", "")  # type: ignore[attr-defined]
     await manager.connect(session_id, ws)
 
-    # Send history on connect
+    # Send history + presence snapshot to the joiner (single inline pair)
     history = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("ts", 1).to_list(500)
     try:
         await ws.send_text(json.dumps({"type": "history", "messages": history}))
@@ -146,8 +146,15 @@ async def session_chat(ws: WebSocket, session_id: str) -> None:
     except Exception as e:
         logger.warning("history send failed: %s", e)
 
-    # Broadcast that someone joined (excluding the joiner gets the same snapshot above)
-    await manager.broadcast(session_id, {"type": "presence", **manager.presence(session_id)})
+    # Broadcast presence change to OTHER peers (skip the joiner — they already got it inline)
+    presence_payload = json.dumps({"type": "presence", **manager.presence(session_id)})
+    for peer in list(manager._rooms.get(session_id, set())):
+        if peer is ws:
+            continue
+        try:
+            await peer.send_text(presence_payload)
+        except Exception as e:
+            logger.debug("peer presence send failed: %s", e)
 
     # Demo: tutor auto-reply on first user message (since we don't have real tutors connecting)
     if not history:

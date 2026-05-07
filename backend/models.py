@@ -113,6 +113,8 @@ class SessionPublic(BaseModel):
     resolution: Optional[str] = None  # resolved | refunded | None
     created_at: str
     summary: Optional[str] = ""
+    summarized_at: Optional[str] = None
+    ai_summary: Optional[str] = ""
 
 
 class ResolveSessionRequest(BaseModel):
