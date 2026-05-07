@@ -48,6 +48,10 @@ async def apply_tutor(body: TutorApplyRequest):
     doc["created_at"] = _now()
     doc["status"] = "pending"
     await _db().tutor_applications.insert_one(doc)
+    try:
+        await send_tutor_application_received(body.email, body.name)
+    except Exception:
+        pass
     return {"ok": True, "id": doc["id"]}
 
 

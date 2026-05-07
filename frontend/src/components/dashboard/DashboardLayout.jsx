@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   Inbox, Activity, History, Bookmark, CreditCard, Settings,
-  Plus, Menu, X, LogOut,
+  Plus, Menu, X, LogOut, ShieldCheck, Briefcase,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
@@ -83,6 +83,32 @@ export default function DashboardLayout({ children }) {
                 </NavLink>
               );
             })}
+            {(user?.role === "tutor" || user?.role === "admin") && (
+              <>
+                <div className="h-px bg-line my-3 mx-2" />
+                <div className="u-caption uppercase tracking-wider px-3 mb-1 text-ink-soft">Other roles</div>
+                {user.role === "tutor" && (
+                  <NavLink
+                    to="/tutor"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-md text-[14.5px] font-medium text-ink-muted hover:bg-canvas-alt hover:text-ink"
+                    data-testid="dash-nav-tutor-portal"
+                  >
+                    <Briefcase size={18} strokeWidth={1.75} /> Tutor portal
+                  </NavLink>
+                )}
+                {user.role === "admin" && (
+                  <NavLink
+                    to="/admin"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-md text-[14.5px] font-medium text-ink-muted hover:bg-canvas-alt hover:text-ink"
+                    data-testid="dash-nav-admin"
+                  >
+                    <ShieldCheck size={18} strokeWidth={1.75} /> Admin console
+                  </NavLink>
+                )}
+              </>
+            )}
           </nav>
           <div className="absolute bottom-6 left-3 right-3">
             <button

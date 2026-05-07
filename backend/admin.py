@@ -96,14 +96,19 @@ async def decide_application(
 # ---------- Refund audit queue ----------
 @router.get("/refunds")
 async def list_refunds(_: dict = Depends(_require_admin)) -> List[dict]:
+    from bson import ObjectId  # localised import
     cursor = db.sessions.find(
         {"resolution": "refunded"}, {"_id": 0}
     ).sort("created_at", -1)
     docs = await cursor.to_list(200)
-    # Enrich with student email
     out = []
     for d in docs:
-        u = await db.users.find_one({"_id": __import__("bson").ObjectId(d["user_id"])}, {"_id": 0, "email": 1, "name": 1}) if d.get("user_id") else None
+        u = None
+        try:
+            if d.get("user_id"):
+                u = await db.users.find_one({"_id": ObjectId(d["user_id"])}, {"_id": 0, "email": 1, "name": 1})
+        except Exception:
+            u = None
         out.append({**d, "student_email": (u or {}).get("email"), "student_name": (u or {}).get("name")})
     return out
 
