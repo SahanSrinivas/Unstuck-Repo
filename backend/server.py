@@ -62,7 +62,7 @@ from payments import router as payments_router  # noqa: E402
 from chat import router as chat_router  # noqa: E402
 from admin import router as admin_router  # noqa: E402
 from tutor_portal import router as tutor_router  # noqa: E402
-from seeds import seed_tutors  # noqa: E402
+from seeds import seed_tutors, seed_test_tutor_user  # noqa: E402
 
 api_router.include_router(auth_router)
 api_router.include_router(passwordless_router)
@@ -102,6 +102,7 @@ async def on_startup() -> None:
     await db.passkey_login_challenges.create_index("expires_at", expireAfterSeconds=0)
     await seed_admin(db)
     await seed_tutors(db)
+    await seed_test_tutor_user(db)
     n = await db.tutors.count_documents({})
     logger.info("Unstuck startup complete: admin seeded, %d tutors, sentry=%s", n, bool(SENTRY_DSN))
 

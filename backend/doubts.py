@@ -298,11 +298,82 @@ async def resolve_session(session_id: str, body: ResolveSessionRequest, user: di
         except Exception:
             pass
     else:
+        # Resolved: kick off AI summary + email asynchronously so the API stays snappy.
+        import asyncio
+        asyncio.create_task(_summarize_and_email(session_id, user, sess, body.note or ""))
+    return {"ok": True, "resolution": body.resolution}
+
+
+# ---------- AI session summary (Sonnet 4.5) ----------
+SUMMARY_SYSTEM = """You are an expert AI engineer summarizing a 1:1 tutoring session.
+Output ONLY plain text (no JSON, no markdown headings, no preamble) — 3 to 5 short sentences:
+1) The original problem in one line.
+2) The root cause or key insight.
+3) The concrete fix or next steps the student should take.
+Be technically dense, no fluff, no emojis. ~80-130 words max."""
+
+
+async def _generate_session_summary(doubt: dict, messages: list) -> str:
+    """Call Claude Sonnet 4.5 via Emergent integrations to summarize a session.
+    Returns plain text. Empty string on failure."""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+    except Exception:
+        return ""
+    api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not api_key:
+        return ""
+    chat = LlmChat(
+        api_key=api_key,
+        session_id=f"summary-{uuid.uuid4().hex[:8]}",
+        system_message=SUMMARY_SYSTEM,
+    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+    transcript_lines = []
+    for m in messages[-40:]:  # last 40 messages is plenty
+        author = m.get("author") or m.get("role") or "user"
+        body = (m.get("body") or "").strip()
+        if body:
+            transcript_lines.append(f"{author}: {body[:600]}")
+    parts = [
+        f"Topics: {', '.join(doubt.get('topics') or []) or 'unspecified'}",
+        f"Original doubt:\n{(doubt.get('description') or '')[:1500]}",
+    ]
+    if transcript_lines:
+        parts.append("Transcript:\n" + "\n".join(transcript_lines))
+    else:
+        parts.append("Transcript: (no chat messages logged)")
+
+    try:
+        raw = await chat.send_message(UserMessage(text="\n\n".join(parts)))
+    except Exception:
+        return ""
+    return (raw or "").strip()[:1200]
+
+
+async def _summarize_and_email(session_id: str, user: dict, sess: dict, student_note: str) -> None:
+    """Background task: generate AI summary, persist on the session, and email the student."""
+    try:
+        doubt = await _db().doubts.find_one({"id": sess["doubt_id"]}, {"_id": 0}) or {}
+        msgs = await _db().chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("ts", 1).to_list(200)
+        ai_summary = await _generate_session_summary(doubt, msgs)
+        final = ai_summary or (student_note.strip() or "Session resolved by student.")
+        await _db().sessions.update_one(
+            {"id": session_id},
+            {"$set": {"summary": final, "ai_summary": ai_summary or "", "summarized_at": _now()}},
+        )
         try:
-            await send_session_summary(user["email"], user.get("name", "there"), sess.get("tutor_name", "your tutor"), sess.get("topic", "AI engineering"), update["summary"], session_id)
+            await send_session_summary(
+                user["email"], user.get("name", "there"),
+                sess.get("tutor_name", "your tutor"),
+                sess.get("topic", "AI engineering"),
+                final, session_id,
+            )
         except Exception:
             pass
-    return {"ok": True, "resolution": body.resolution}
+    except Exception:
+        # never let a background task crash the worker
+        pass
 
 
 # ---------- Saved tutors ----------

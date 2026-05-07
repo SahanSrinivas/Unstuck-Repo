@@ -108,3 +108,28 @@ async def seed_tutors(db):
             {"$set": {**t, "created_at": now}},
             upsert=True,
         )
+
+
+async def seed_test_tutor_user(db):
+    """Seed a test tutor user (role=tutor, linked to tutor-aria) for end-to-end tutor-portal testing.
+    Idempotent: only inserts if missing; never downgrades existing user."""
+    import os, bcrypt
+    email = os.environ.get("TUTOR_TEST_EMAIL", "tutor.test@unstuck.dev").lower()
+    password = os.environ.get("TUTOR_TEST_PASSWORD", "Tutor123!")
+    tutor_id = "tutor-aria"
+    existing = await db.users.find_one({"email": email})
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if existing is None:
+        await db.users.insert_one({
+            "email": email,
+            "password_hash": bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
+            "name": "Aria Chen",
+            "role": "tutor",
+            "tutor_id": tutor_id,
+            "created_at": now_iso,
+        })
+    else:
+        await db.users.update_one(
+            {"email": email},
+            {"$set": {"role": "tutor", "tutor_id": tutor_id}},
+        )

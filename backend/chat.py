@@ -46,6 +46,17 @@ class ConnectionManager:
             except Exception as e:
                 logger.warning("broadcast send failed: %s", e)
 
+    def presence(self, session_id: str) -> dict:
+        """Snapshot of who is online in a room, deduped by user_id+role."""
+        seen: Dict[str, dict] = {}
+        for s in self._rooms.get(session_id, set()):
+            uid = getattr(s, "_user_id", None) or "anon"
+            role = getattr(s, "_role", "student")
+            name = getattr(s, "_user_name", "") or ""
+            key = f"{uid}:{role}"
+            seen[key] = {"user_id": uid, "role": role, "name": name}
+        return {"online": list(seen.values())}
+
 
 manager = ConnectionManager()
 
@@ -80,6 +91,20 @@ async def list_messages(session_id: str, user: dict = Depends(get_current_user))
     return docs
 
 
+@router.get("/sessions/{session_id}/presence")
+async def get_presence(session_id: str, user: dict = Depends(get_current_user)) -> dict:
+    """Snapshot of who's currently connected to the session room."""
+    sess = await db.sessions.find_one({"id": session_id}, {"_id": 0})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+    is_owner = sess.get("user_id") == user["_id"]
+    is_tutor = user.get("role") == "tutor" and sess.get("tutor_id") == user.get("tutor_id")
+    is_admin = user.get("role") == "admin"
+    if not (is_owner or is_tutor or is_admin):
+        raise HTTPException(status_code=403, detail="Not your session")
+    return manager.presence(session_id)
+
+
 # ---------- WebSocket: live chat ----------
 @router.websocket("/ws/sessions/{session_id}")
 async def session_chat(ws: WebSocket, session_id: str) -> None:
@@ -109,14 +134,20 @@ async def session_chat(ws: WebSocket, session_id: str) -> None:
         return
 
     ws._role = role  # type: ignore[attr-defined]
+    ws._user_id = user["_id"]  # type: ignore[attr-defined]
+    ws._user_name = user.get("name", "")  # type: ignore[attr-defined]
     await manager.connect(session_id, ws)
 
     # Send history on connect
     history = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("ts", 1).to_list(500)
     try:
         await ws.send_text(json.dumps({"type": "history", "messages": history}))
+        await ws.send_text(json.dumps({"type": "presence", **manager.presence(session_id)}))
     except Exception as e:
         logger.warning("history send failed: %s", e)
+
+    # Broadcast that someone joined (excluding the joiner gets the same snapshot above)
+    await manager.broadcast(session_id, {"type": "presence", **manager.presence(session_id)})
 
     # Demo: tutor auto-reply on first user message (since we don't have real tutors connecting)
     if not history:
@@ -182,6 +213,11 @@ async def session_chat(ws: WebSocket, session_id: str) -> None:
         logger.warning("ws loop error: %s", e)
     finally:
         manager.disconnect(session_id, ws)
+        # Notify remaining peers that presence changed
+        try:
+            await manager.broadcast(session_id, {"type": "presence", **manager.presence(session_id)})
+        except Exception as e:
+            logger.debug("post-disconnect broadcast failed: %s", e)
 
 
 def _demo_tutor_reply(user_text: str) -> str:

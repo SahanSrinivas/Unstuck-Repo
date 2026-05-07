@@ -19,7 +19,7 @@ import SavedTutors from "./pages/dashboard/SavedTutors";
 import Billing from "./pages/dashboard/Billing";
 import Settings from "./pages/dashboard/Settings";
 import Admin from "./pages/Admin";
-import { TutorQueue, TutorSessions, TutorProfile } from "./pages/tutor/TutorPages";
+import { TutorQueue, TutorSessions, TutorProfile, TutorPayouts } from "./pages/tutor/TutorPages";
 
 import { Toaster } from "./components/ui/sonner";
 
@@ -44,6 +44,7 @@ export default function App() {
           <Route path="/tutor" element={<ProtectedRoute><TutorQueue /></ProtectedRoute>} />
           <Route path="/tutor/sessions" element={<ProtectedRoute><TutorSessions /></ProtectedRoute>} />
           <Route path="/tutor/profile" element={<ProtectedRoute><TutorProfile /></ProtectedRoute>} />
+          <Route path="/tutor/payouts" element={<ProtectedRoute><TutorPayouts /></ProtectedRoute>} />
           <Route path="/doubts/new" element={<ProtectedRoute><NewDoubt /></ProtectedRoute>} />
           <Route path="/sessions/:id" element={<ProtectedRoute><Session /></ProtectedRoute>} />
 

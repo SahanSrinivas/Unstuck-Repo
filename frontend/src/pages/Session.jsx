@@ -135,9 +135,14 @@ export default function Session() {
   const [resolveErr, setResolveErr] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const [presence, setPresence] = useState([]);
+  const [reconnecting, setReconnecting] = useState(false);
   const wsRef = useRef(null);
   const timerRef = useRef(null);
   const scrollRef = useRef(null);
+  const reconnectAttempts = useRef(0);
+  const reconnectTimer = useRef(null);
+  const closedByUser = useRef(false);
 
   // Load session metadata
   useEffect(() => {
@@ -150,33 +155,57 @@ export default function Session() {
     return () => { cancelled = true; };
   }, [id]);
 
-  // Connect WebSocket for live chat
+  // Connect WebSocket for live chat — with auto-reconnect (exp backoff)
   useEffect(() => {
     if (!id) return;
-    const backend = process.env.REACT_APP_BACKEND_URL || "";
-    const wsBase = backend.replace(/^http/, "ws");
-    const url = `${wsBase}/api/ws/sessions/${id}`;
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+    closedByUser.current = false;
 
-    ws.onopen = () => setWsConnected(true);
-    ws.onclose = () => setWsConnected(false);
-    ws.onerror = (e) => console.warn("chat ws error", e);
-    ws.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type === "history") {
-          setMessages(data.messages || []);
-        } else if (data.type === "message" && data.message) {
-          setMessages((m) => (m.some((x) => x.id === data.message.id) ? m : [...m, data.message]));
+    const connect = () => {
+      const backend = process.env.REACT_APP_BACKEND_URL || "";
+      const wsBase = backend.replace(/^http/, "ws");
+      const url = `${wsBase}/api/ws/sessions/${id}`;
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setWsConnected(true);
+        setReconnecting(false);
+        reconnectAttempts.current = 0;
+      };
+      ws.onclose = () => {
+        setWsConnected(false);
+        setPresence([]);
+        if (closedByUser.current) return;
+        // Schedule reconnect with capped exponential backoff
+        const attempt = Math.min(reconnectAttempts.current + 1, 6);
+        reconnectAttempts.current = attempt;
+        const delay = Math.min(1000 * 2 ** (attempt - 1), 15000);
+        setReconnecting(true);
+        reconnectTimer.current = setTimeout(connect, delay);
+      };
+      ws.onerror = (e) => console.warn("chat ws error", e);
+      ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === "history") {
+            setMessages(data.messages || []);
+          } else if (data.type === "message" && data.message) {
+            setMessages((m) => (m.some((x) => x.id === data.message.id) ? m : [...m, data.message]));
+          } else if (data.type === "presence") {
+            setPresence(data.online || []);
+          }
+        } catch (err) {
+          console.warn("bad ws payload", err);
         }
-      } catch (err) {
-        console.warn("bad ws payload", err);
-      }
+      };
     };
 
+    connect();
+
     return () => {
-      try { ws.close(); } catch (e) { console.warn("ws close failed", e); }
+      closedByUser.current = true;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      try { wsRef.current?.close(); } catch (e) { console.warn("ws close failed", e); }
     };
   }, [id]);
 
@@ -232,12 +261,37 @@ export default function Session() {
             <Link to="/dashboard" className="text-ink-muted hover:text-purple-primary"><ArrowLeft size={18} strokeWidth={1.75} /></Link>
             <div>
               <div className="font-display font-semibold text-ink">{session.topic} with {session.tutor_name}</div>
-              <div className="u-caption flex items-center gap-2">
+              <div className="u-caption flex items-center gap-2 flex-wrap">
                 Session #{session.id.slice(0, 8)}
-                <span className={`inline-flex items-center gap-1 ${wsConnected ? "text-good" : "text-ink-soft"}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? "bg-good" : "bg-ink-soft"}`} />
-                  {wsConnected ? "Live" : "Connecting…"}
+                <span
+                  className={`inline-flex items-center gap-1 ${
+                    wsConnected ? "text-good" : reconnecting ? "text-warn" : "text-ink-soft"
+                  }`}
+                  data-testid="session-ws-status"
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      wsConnected ? "bg-good" : reconnecting ? "bg-warn animate-pulse" : "bg-ink-soft"
+                    }`}
+                  />
+                  {wsConnected ? "Live" : reconnecting ? "Reconnecting…" : "Connecting…"}
                 </span>
+                {presence.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5" data-testid="session-presence">
+                    <span className="text-ink-soft">·</span>
+                    {presence.map((p, idx) => (
+                      <span
+                        key={`${p.user_id}-${p.role}-${idx}`}
+                        className="inline-flex items-center gap-1 u-pill !py-0 !px-2 text-[11px]"
+                        title={p.name || p.role}
+                        data-testid={`presence-${p.role}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-good" />
+                        {p.role === "tutor" ? "Tutor" : p.role === "admin" ? "Admin" : "You"}
+                      </span>
+                    ))}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -268,7 +322,7 @@ export default function Session() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMsg()}
-                placeholder={wsConnected ? "Reply to your tutor…" : "Connecting…"}
+                placeholder={wsConnected ? "Reply to your tutor…" : reconnecting ? "Reconnecting…" : "Connecting…"}
                 disabled={!wsConnected}
                 data-testid="session-chat-input"
               />

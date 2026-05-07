@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { LogOut, Inbox, Clock as ClockIcon, User as UserIcon, Menu, X } from "lucide-react";
+import { LogOut, Inbox, Clock as ClockIcon, User as UserIcon, Wallet, Menu, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 const TUTOR_NAV = [
   { to: "/tutor", label: "Queue", icon: Inbox, end: true },
   { to: "/tutor/sessions", label: "My Sessions", icon: ClockIcon },
+  { to: "/tutor/payouts", label: "Payouts", icon: Wallet },
   { to: "/tutor/profile", label: "Profile & Earnings", icon: UserIcon },
 ];
 

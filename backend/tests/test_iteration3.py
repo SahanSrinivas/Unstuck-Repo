@@ -97,8 +97,16 @@ class TestWebSocketConnect:
                 first = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
                 assert first["type"] == "history"
                 assert first["messages"] == []
-                # 2nd frame: tutor intro auto-broadcast
-                second = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+                # presence snapshot (NEW in iter5)
+                pres = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+                assert pres["type"] == "presence"
+                # next: tutor intro auto-broadcast (skip any extra presence broadcasts)
+                second = None
+                for _ in range(4):
+                    f = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+                    if f.get("type") == "message":
+                        second = f
+                        break
                 assert second["type"] == "message"
                 m = second["message"]
                 assert m["role"] == "tutor"
@@ -128,14 +136,22 @@ class TestWebSocketBroadcast:
                 # ws_a is first → expects history (empty) + tutor intro broadcast
                 f1 = json.loads(await asyncio.wait_for(ws_a.recv(), timeout=10))
                 assert f1["type"] == "history"
-                f2 = json.loads(await asyncio.wait_for(ws_a.recv(), timeout=10))
-                assert f2["type"] == "message" and f2["message"]["role"] == "tutor"
+                # consume presence + intro (order may interleave with presence broadcasts)
+                f2 = None
+                for _ in range(4):
+                    fr = json.loads(await asyncio.wait_for(ws_a.recv(), timeout=10))
+                    if fr.get("type") == "message":
+                        f2 = fr
+                        break
+                assert f2 is not None and f2["message"]["role"] == "tutor"
 
                 async with websockets.connect(url, additional_headers=headers) as ws_b:
                     # ws_b joins after intro persisted → expect history with 1 intro msg
                     h_b = json.loads(await asyncio.wait_for(ws_b.recv(), timeout=10))
                     assert h_b["type"] == "history"
                     assert len(h_b["messages"]) >= 1
+                    # consume any presence frames after history
+                    # (don't assert; just allow the next reads to find message frames)
 
                     # Send a 'rag' keyword message from A — expect broadcast to B
                     user_text = "Help with rag recall — what about chunking?"
@@ -190,17 +206,24 @@ class TestCannedReplies:
         async def run():
             url = f"{WS_BASE}/api/ws/sessions/{sid}"
             async with websockets.connect(url, additional_headers=_cookie_header(student)) as ws:
-                # drain history + intro
-                _ = await asyncio.wait_for(ws.recv(), timeout=10)
-                _ = await asyncio.wait_for(ws.recv(), timeout=10)
+                # drain history + presence + intro (skip non-message frames)
+                drained_intro = False
+                for _ in range(5):
+                    fr = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+                    if fr.get("type") == "message":
+                        drained_intro = True
+                        break
+                assert drained_intro
                 await ws.send(json.dumps({"body": text}))
                 # Expect echo, then canned reply
                 bodies = []
-                for _ in range(3):
+                for _ in range(6):
                     try:
                         frame = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
-                        if frame["type"] == "message":
+                        if frame.get("type") == "message":
                             bodies.append(frame["message"]["body"])
+                            if len(bodies) >= 2:
+                                break
                     except asyncio.TimeoutError:
                         break
                 return bodies
@@ -214,15 +237,20 @@ class TestCannedReplies:
         async def run():
             url = f"{WS_BASE}/api/ws/sessions/{sid}"
             async with websockets.connect(url, additional_headers=_cookie_header(student)) as ws:
-                _ = await asyncio.wait_for(ws.recv(), timeout=10)
-                _ = await asyncio.wait_for(ws.recv(), timeout=10)
+                # drain history + presence + intro
+                for _ in range(5):
+                    fr = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+                    if fr.get("type") == "message":
+                        break
                 await ws.send(json.dumps({"body": "totally random topic xyz"}))
                 bodies = []
-                for _ in range(3):
+                for _ in range(6):
                     try:
                         frame = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
-                        if frame["type"] == "message":
+                        if frame.get("type") == "message":
                             bodies.append(frame["message"]["body"])
+                            if len(bodies) >= 2:
+                                break
                     except asyncio.TimeoutError:
                         break
                 return bodies

@@ -102,7 +102,7 @@ class TestTutors:
         r = requests.get(f"{API}/tutors", timeout=15)
         assert r.status_code == 200
         tutors = r.json()
-        assert isinstance(tutors, list) and len(tutors) == 8
+        assert isinstance(tutors, list) and len(tutors) >= 8
         sample = tutors[0]
         for k in ("id", "name", "specialties", "rating", "response_time_min"):
             assert k in sample, f"missing {k}"

@@ -3,15 +3,22 @@ import os
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from auth import get_current_user
 from database import db
 
 router = APIRouter(prefix="/tutor", tags=["tutor"])
 
+PLATFORM_FEE = 0.30  # 30% platform fee → tutor keeps 70%
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+class AvailabilityRequest(BaseModel):
+    available: bool
 
 
 def _require_tutor(user: dict = Depends(get_current_user)) -> dict:
@@ -72,5 +79,68 @@ async def tutor_profile(tutor: dict = Depends(_require_tutor)) -> dict:
         raise HTTPException(status_code=404, detail="Tutor not found")
     # earnings (paid, non-refunded sessions where I'm tutor)
     sessions = await db.sessions.find({"tutor_id": tid, "status": "completed", "resolution": {"$ne": "refunded"}}, {"_id": 0, "price": 1}).to_list(500)
-    earnings = sum((s.get("price", 0) or 0) for s in sessions) * 0.7  # 70% take-home
+    earnings = sum((s.get("price", 0) or 0) for s in sessions) * (1 - PLATFORM_FEE)
     return {**t, "earnings_total": round(earnings, 2), "completed_sessions": len(sessions)}
+
+
+@router.patch("/availability")
+async def set_availability(body: AvailabilityRequest, tutor: dict = Depends(_require_tutor)) -> dict:
+    """Tutor toggles their `available` flag — only available tutors get auto-matched."""
+    tid = tutor.get("tutor_id")
+    if not tid:
+        raise HTTPException(status_code=400, detail="No tutor profile linked to user")
+    await db.tutors.update_one(
+        {"id": tid},
+        {"$set": {"available": bool(body.available), "availability_updated_at": _now()}},
+    )
+    return {"ok": True, "available": bool(body.available)}
+
+
+@router.get("/payouts")
+async def tutor_payouts(tutor: dict = Depends(_require_tutor)) -> dict:
+    """Earnings breakdown: per-session list + totals (paid, pending, lifetime)."""
+    tid = tutor.get("tutor_id")
+    if not tid:
+        raise HTTPException(status_code=400, detail="No tutor profile linked to user")
+    cursor = db.sessions.find({"tutor_id": tid}, {"_id": 0}).sort("created_at", -1)
+    sessions = await cursor.to_list(500)
+
+    items = []
+    paid_total = 0.0
+    pending_total = 0.0
+    refunded_total = 0.0
+    for s in sessions:
+        gross = float(s.get("price", 0) or 0)
+        net = round(gross * (1 - PLATFORM_FEE), 2)
+        status = s.get("status", "scheduled")
+        resolution = s.get("resolution")
+        if status == "completed" and resolution != "refunded":
+            payout_state = "paid"
+            paid_total += net
+        elif resolution == "refunded":
+            payout_state = "refunded"
+            refunded_total += net
+        else:
+            payout_state = "pending"
+            pending_total += net
+        items.append({
+            "session_id": s.get("id"),
+            "topic": s.get("topic"),
+            "tier": s.get("tier"),
+            "duration_min": s.get("duration_min"),
+            "gross": gross,
+            "net": net,
+            "payout_state": payout_state,
+            "created_at": s.get("created_at"),
+        })
+
+    return {
+        "platform_fee_pct": int(PLATFORM_FEE * 100),
+        "totals": {
+            "paid": round(paid_total, 2),
+            "pending": round(pending_total, 2),
+            "refunded": round(refunded_total, 2),
+            "lifetime": round(paid_total + pending_total, 2),
+        },
+        "items": items,
+    }
