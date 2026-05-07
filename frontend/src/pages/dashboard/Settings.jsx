@@ -21,8 +21,8 @@ export default function Settings() {
     setNameMsg(""); setNameErr(""); setSavingName(true);
     try {
       await api.patch("/auth/me", { name });
+      await refresh();
       setNameMsg("Profile updated.");
-      refresh();
     } catch (ex) {
       setNameErr(formatApiErrorDetail(ex.response?.data?.detail) || ex.message);
     } finally {

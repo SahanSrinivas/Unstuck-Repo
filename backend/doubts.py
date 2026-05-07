@@ -262,11 +262,23 @@ async def resolve_session(session_id: str, body: ResolveSessionRequest, user: di
     }
     await _db().sessions.update_one({"id": session_id, "user_id": user["_id"]}, {"$set": update})
     if body.resolution == "refunded":
-        # Mark any related payment txn as refunded (idempotent)
-        await _db().payment_transactions.update_many(
-            {"user_id": user["_id"], "doubt_id": sess["doubt_id"], "tier": sess["tier"]},
-            {"$set": {"refunded": True, "refunded_at": _now()}},
+        # Mark only the most recent matching paid/pending payment txn as refunded (idempotent).
+        # Avoids blanket-refunding all retries for the same doubt+tier.
+        match = await _db().payment_transactions.find_one(
+            {
+                "user_id": user["_id"],
+                "doubt_id": sess["doubt_id"],
+                "tier": sess["tier"],
+                "refunded": {"$ne": True},
+            },
+            {"_id": 0, "session_id": 1},
+            sort=[("created_at", -1)],
         )
+        if match and match.get("session_id"):
+            await _db().payment_transactions.update_one(
+                {"session_id": match["session_id"]},
+                {"$set": {"refunded": True, "refunded_at": _now()}},
+            )
     return {"ok": True, "resolution": body.resolution}
 
 
