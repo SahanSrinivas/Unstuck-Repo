@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 
 from models import RegisterRequest, LoginRequest, UserPublic, UpdateProfileRequest, ChangePasswordRequest
+from rate_limit import limiter
 
 JWT_ALGORITHM = "HS256"
 ACCESS_MIN = 60 * 24  # 1 day
@@ -26,19 +27,21 @@ def _secret() -> str:
     return os.environ["JWT_SECRET"]
 
 
-def create_access_token(user_id: str, email: str) -> str:
+def create_access_token(user_id: str, email: str, token_version: int = 0) -> str:
     payload = {
         "sub": user_id,
         "email": email,
+        "v": token_version,
         "type": "access",
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_MIN),
     }
     return jwt.encode(payload, _secret(), algorithm=JWT_ALGORITHM)
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, token_version: int = 0) -> str:
     payload = {
         "sub": user_id,
+        "v": token_version,
         "type": "refresh",
         "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_DAYS),
     }
@@ -94,6 +97,9 @@ async def get_current_user(request: Request) -> dict:
             raise HTTPException(status_code=401, detail="Invalid token subject")
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        # Token version check — invalidates after password change
+        if payload.get("v", 0) != user.get("token_version", 0):
+            raise HTTPException(status_code=401, detail="Token revoked — please sign in again")
         user["_id"] = str(user["_id"])
         user.pop("password_hash", None)
         return user
@@ -121,21 +127,23 @@ async def register(body: RegisterRequest, response: Response):
     }
     res = await db.users.insert_one(doc)
     doc["_id"] = res.inserted_id
-    access = create_access_token(str(res.inserted_id), email)
-    refresh = create_refresh_token(str(res.inserted_id))
+    access = create_access_token(str(res.inserted_id), email, 0)
+    refresh = create_refresh_token(str(res.inserted_id), 0)
     _set_cookies(response, access, refresh)
     return _user_to_public(doc)
 
 
 @router.post("/login", response_model=UserPublic)
-async def login(body: LoginRequest, response: Response):
+@limiter.limit("10/minute")
+async def login(body: LoginRequest, request: Request, response: Response):
     db = get_db_dep()
     email = body.email.lower().strip()
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    access = create_access_token(str(user["_id"]), email)
-    refresh = create_refresh_token(str(user["_id"]))
+    v = user.get("token_version", 0)
+    access = create_access_token(str(user["_id"]), email, v)
+    refresh = create_refresh_token(str(user["_id"]), v)
     _set_cookies(response, access, refresh)
     return _user_to_public(user)
 
@@ -199,15 +207,23 @@ async def update_profile(body: UpdateProfileRequest, user: dict = Depends(get_cu
 
 
 @router.post("/password")
-async def change_password(body: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+async def change_password(body: ChangePasswordRequest, response: Response, user: dict = Depends(get_current_user)):
     db = get_db_dep()
     full = await db.users.find_one({"_id": ObjectId(user["_id"])})
     if not full or not verify_password(body.current_password, full.get("password_hash", "")):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
+    new_version = int(full.get("token_version", 0)) + 1
     await db.users.update_one(
         {"_id": ObjectId(user["_id"])},
-        {"$set": {"password_hash": hash_password(body.new_password)}},
+        {"$set": {
+            "password_hash": hash_password(body.new_password),
+            "token_version": new_version,
+        }},
     )
+    # Re-issue cookies with new token version so the user stays signed in
+    access = create_access_token(user["_id"], full["email"], new_version)
+    refresh = create_refresh_token(user["_id"], new_version)
+    _set_cookies(response, access, refresh)
     return {"ok": True}
 
 

@@ -89,12 +89,26 @@ async def session_chat(ws: WebSocket, session_id: str) -> None:
         await ws.close(code=4401)
         return
 
-    sess = await db.sessions.find_one({"id": session_id, "user_id": user["_id"]}, {"_id": 0})
+    # Owner check: student owns the session OR tutor is assigned to it OR user is admin
+    sess = await db.sessions.find_one({"id": session_id}, {"_id": 0})
     if not sess:
         await ws.accept()
         await ws.close(code=4404)
         return
 
+    role = "student"
+    if user.get("role") == "admin":
+        role = "admin"
+    elif user.get("role") == "tutor" and sess.get("tutor_id") == user.get("tutor_id"):
+        role = "tutor"
+    elif sess.get("user_id") == user["_id"]:
+        role = "student"
+    else:
+        await ws.accept()
+        await ws.close(code=4403)
+        return
+
+    ws._role = role  # type: ignore[attr-defined]
     await manager.connect(session_id, ws)
 
     # Send history on connect
@@ -106,17 +120,21 @@ async def session_chat(ws: WebSocket, session_id: str) -> None:
 
     # Demo: tutor auto-reply on first user message (since we don't have real tutors connecting)
     if not history:
-        intro = {
-            "id": f"m-{uuid.uuid4().hex[:10]}",
-            "session_id": session_id,
-            "user_id": "tutor",
-            "role": "tutor",
-            "author": sess.get("tutor_name", "Tutor"),
-            "body": f"Hi — I'm {sess.get('tutor_name', 'your tutor')}. I read your doubt. What have you tried so far?",
-            "ts": _now(),
-        }
-        await db.chat_messages.insert_one(dict(intro))
-        await manager.broadcast(session_id, {"type": "message", "message": intro})
+        # Only seed canned intro if no real tutor is on the call yet
+        room = manager._rooms.get(session_id, set())
+        has_human_tutor = any(getattr(s, "_role", None) == "tutor" for s in room)
+        if not has_human_tutor:
+            intro = {
+                "id": f"m-{uuid.uuid4().hex[:10]}",
+                "session_id": session_id,
+                "user_id": "tutor",
+                "role": "tutor",
+                "author": sess.get("tutor_name", "Tutor"),
+                "body": f"Hi — I'm {sess.get('tutor_name', 'your tutor')}. I read your doubt. What have you tried so far?",
+                "ts": _now(),
+            }
+            await db.chat_messages.insert_one(dict(intro))
+            await manager.broadcast(session_id, {"type": "message", "message": intro})
 
     try:
         while True:
@@ -132,28 +150,32 @@ async def session_chat(ws: WebSocket, session_id: str) -> None:
                 "id": f"m-{uuid.uuid4().hex[:10]}",
                 "session_id": session_id,
                 "user_id": user["_id"],
-                "role": "you",
-                "author": user.get("name", "You"),
+                "role": "tutor" if role == "tutor" else "you",
+                "author": user.get("name", "User"),
                 "body": body[:2000],
                 "ts": _now(),
             }
             await db.chat_messages.insert_one(dict(msg))
             await manager.broadcast(session_id, {"type": "message", "message": msg})
 
-            # Demo auto-reply from tutor (since real tutor isn't connected)
-            reply_body = _demo_tutor_reply(body)
-            if reply_body:
-                reply = {
-                    "id": f"m-{uuid.uuid4().hex[:10]}",
-                    "session_id": session_id,
-                    "user_id": "tutor",
-                    "role": "tutor",
-                    "author": sess.get("tutor_name", "Tutor"),
-                    "body": reply_body,
-                    "ts": _now(),
-                }
-                await db.chat_messages.insert_one(dict(reply))
-                await manager.broadcast(session_id, {"type": "message", "message": reply})
+            # Demo auto-reply only when sender is student AND no real tutor is present
+            if role == "student":
+                room = manager._rooms.get(session_id, set())
+                has_human_tutor = any(getattr(s, "_role", None) == "tutor" for s in room)
+                if not has_human_tutor:
+                    reply_body = _demo_tutor_reply(body)
+                    if reply_body:
+                        reply = {
+                            "id": f"m-{uuid.uuid4().hex[:10]}",
+                            "session_id": session_id,
+                            "user_id": "tutor",
+                            "role": "tutor",
+                            "author": sess.get("tutor_name", "Tutor"),
+                            "body": reply_body,
+                            "ts": _now(),
+                        }
+                        await db.chat_messages.insert_one(dict(reply))
+                        await manager.broadcast(session_id, {"type": "message", "message": reply})
     except WebSocketDisconnect:
         pass
     except Exception as e:

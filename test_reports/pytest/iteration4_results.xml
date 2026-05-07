@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="20" time="12.290" timestamp="2026-05-07T17:39:35.095771+00:00" hostname="agent-env-568e8309-3e7e-4e78-b8e0-3913155fa749"><testcase classname="tests.test_iteration4.TestAdminEndpoints" name="test_stats_admin_only" time="0.468" /><testcase classname="tests.test_iteration4.TestAdminEndpoints" name="test_stats_non_admin_forbidden" time="0.413" /><testcase classname="tests.test_iteration4.TestAdminEndpoints" name="test_applications_list_admin" time="0.473" /><testcase classname="tests.test_iteration4.TestAdminEndpoints" name="test_applications_status_filter" time="0.544" /><testcase classname="tests.test_iteration4.TestAdminEndpoints" name="test_applications_non_admin_forbidden" time="0.408" /><testcase classname="tests.test_iteration4.TestAdminEndpoints" name="test_decide_invalid_decision" time="0.464" /><testcase classname="tests.test_iteration4.TestAdminEndpoints" name="test_decide_approve_promotes_user_to_tutor" time="1.038" /><testcase classname="tests.test_iteration4.TestAdminEndpoints" name="test_decide_reject_no_tutor_created" time="0.960" /><testcase classname="tests.test_iteration4.TestAdminEndpoints" name="test_refunds_admin_only" time="0.877" /><testcase classname="tests.test_iteration4.TestTutorPortal" name="test_queue_student_forbidden" time="0.406" /><testcase classname="tests.test_iteration4.TestTutorPortal" name="test_queue_admin_allowed" time="0.430" /><testcase classname="tests.test_iteration4.TestTutorPortal" name="test_sessions_admin_allowed" time="0.430" /><testcase classname="tests.test_iteration4.TestTutorPortal" name="test_profile_admin_no_tutor_id" time="0.446" /><testcase classname="tests.test_iteration4.TestTutorPortal" name="test_full_promotion_flow_tutor_endpoints" time="1.013" /><testcase classname="tests.test_iteration4.TestTutorPortal" name="test_accept_session_403_for_other_tutor" time="0.933" /><testcase classname="tests.test_iteration4.TestJWTRotation" name="test_old_token_revoked_after_password_change" time="1.092" /><testcase classname="tests.test_iteration4.TestRateLimit" name="test_login_rate_limit_429" time="0.280" /><testcase classname="tests.test_iteration4.TestEmailNoop" name="test_tutor_apply_returns_ok_with_dummy_resend_key" time="0.420" /><testcase classname="tests.test_iteration4.TestWebhookAutoCreate" name="test_webhook_auto_create_session_via_helper" time="0.922"><failure message="KeyError: 'fast'">tests/test_iteration4.py:370: in test_webhook_auto_create_session_via_helper
+    sess_id, count, txn = asyncio.run(_run())
+                          ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/test_iteration4.py:338: in _run
+    tier = _TIERS["fast"]
+           ^^^^^^^^^^^^^^
+E   KeyError: 'fast'</failure></testcase><testcase classname="tests.test_iteration4" name="test_healthz" time="0.122" /></testsuite></testsuites>

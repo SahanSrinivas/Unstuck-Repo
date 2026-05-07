@@ -120,8 +120,49 @@ async def stripe_webhook(request: Request):
         evt = await stripe.handle_webhook(body, sig)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Webhook error: {str(e)[:200]}")
+    txn = await _db().payment_transactions.find_one({"session_id": evt.session_id}, {"_id": 0})
     await _db().payment_transactions.update_one(
         {"session_id": evt.session_id},
         {"$set": {"payment_status": evt.payment_status, "last_event": evt.event_type}},
     )
+    # Auto-create session row if paid event arrives and we don't have one yet
+    if evt.payment_status == "paid" and txn and not txn.get("session_created"):
+        from seeds import TIERS as _TIERS
+        from bson import ObjectId
+        tier_key = txn.get("tier")
+        if tier_key in _TIERS:
+            tier = _TIERS[tier_key]
+            doubt = await _db().doubts.find_one({"id": txn.get("doubt_id")}, {"_id": 0})
+            if doubt:
+                tutors = await _db().tutors.find({"available": True}, {"_id": 0}).to_list(50)
+                if tutors:
+                    chosen = tutors[0]  # webhook path: simple pick — user UI normally pre-selects
+                    sess = {
+                        "id": f"s-{uuid.uuid4().hex[:10]}",
+                        "user_id": txn.get("user_id"),
+                        "doubt_id": txn.get("doubt_id"),
+                        "tutor_id": chosen["id"],
+                        "tutor_name": chosen["name"],
+                        "topic": (doubt.get("topics") or ["General"])[0],
+                        "tier": tier_key,
+                        "duration_min": tier["duration_min"],
+                        "price": tier["price"],
+                        "status": "scheduled",
+                        "created_at": _now(),
+                        "summary": "",
+                        "from_webhook": True,
+                    }
+                    await _db().sessions.insert_one(sess)
+                    await _db().payment_transactions.update_one(
+                        {"session_id": evt.session_id},
+                        {"$set": {"session_created": True, "internal_session_id": sess["id"]}},
+                    )
+                    # Best-effort email to student
+                    try:
+                        u = await _db().users.find_one({"_id": ObjectId(txn["user_id"])}, {"_id": 0, "email": 1, "name": 1})
+                        if u:
+                            from email_service import send_doubt_matched
+                            await send_doubt_matched(u["email"], u.get("name", "there"), chosen["name"], sess["topic"], sess["id"])
+                    except Exception:
+                        pass
     return {"ok": True}

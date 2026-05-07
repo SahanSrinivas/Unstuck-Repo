@@ -34,6 +34,12 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-3">
           {user ? (
             <>
+              {user.role === "admin" && (
+                <Link to="/admin" className={linkCls} data-testid="nav-admin">Admin</Link>
+              )}
+              {user.role === "tutor" && (
+                <Link to="/tutor" className={linkCls} data-testid="nav-tutor-portal">Tutor portal</Link>
+              )}
               <Link to="/dashboard" className={linkCls} data-testid="nav-dashboard">Dashboard</Link>
               <button className="u-btn-secondary" onClick={handleSignOut} data-testid="nav-signout">Sign out</button>
             </>

@@ -14,6 +14,10 @@ from models import (
 )
 from auth import get_current_user
 from seeds import TIERS
+from email_service import (
+    send_doubt_matched, send_session_summary,
+    send_refund_confirmation, send_tutor_application_received,
+)
 
 router = APIRouter(tags=["doubts"])
 
@@ -220,6 +224,11 @@ async def match_tutor(doubt_id: str, body: MatchRequest, user: dict = Depends(ge
     await _db().sessions.insert_one(sess)
     await _db().doubts.update_one({"id": doubt_id}, {"$set": {"status": "matched"}})
     sess.pop("_id", None)
+    # Notify student by email
+    try:
+        await send_doubt_matched(user["email"], user.get("name", "there"), tutor["name"], sess["topic"], sess["id"])
+    except Exception:
+        pass
     return SessionPublic(**sess)
 
 
@@ -265,7 +274,6 @@ async def resolve_session(session_id: str, body: ResolveSessionRequest, user: di
     await _db().sessions.update_one({"id": session_id, "user_id": user["_id"]}, {"$set": update})
     if body.resolution == "refunded":
         # Mark only the most recent matching paid/pending payment txn as refunded (idempotent).
-        # Avoids blanket-refunding all retries for the same doubt+tier.
         match = await _db().payment_transactions.find_one(
             {
                 "user_id": user["_id"],
@@ -281,6 +289,15 @@ async def resolve_session(session_id: str, body: ResolveSessionRequest, user: di
                 {"session_id": match["session_id"]},
                 {"$set": {"refunded": True, "refunded_at": _now()}},
             )
+        try:
+            await send_refund_confirmation(user["email"], user.get("name", "there"), float(sess.get("price", 0) or 0), sess.get("topic", "AI engineering"))
+        except Exception:
+            pass
+    else:
+        try:
+            await send_session_summary(user["email"], user.get("name", "there"), sess.get("tutor_name", "your tutor"), sess.get("topic", "AI engineering"), update["summary"], session_id)
+        except Exception:
+            pass
     return {"ok": True, "resolution": body.resolution}
 
 
