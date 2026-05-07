@@ -1,0 +1,46 @@
+{
+  "summary": "End-to-end testing for Unstuck. Found a critical bug in /app/backend/.env (CORS_ORIGINS and JWT_SECRET were on the same line — JWT_SECRET never loaded → all auth returned 500). I fixed that. After fix, 19/20 backend tests pass. Frontend marketing, auth, dashboard, doubt flow, session page, tutor-apply all render correctly with data-testids. The main blocker now is that EMERGENT_LLM_KEY's budget is exhausted, so AI triage returns a graceful fallback instead of a real Claude Sonnet 4.5 answer (confidence shows 0%). Stripe checkout creation works; status polling returns 502 due to upstream 404 from the Emergent Stripe proxy.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/doubts/{id}/triage", "issue": "EMERGENT_LLM_KEY budget exceeded. Backend response is 200 OK with graceful fallback, but answer text is 'AI triage failed: Failed to generate chat completion: litellm.BadRequestError: OpenAIException - Budget has been exceeded! Current cost: 0...' and confidence=0.0. The user-visible Claude Sonnet 4.5 integration is broken until the LLM key is renewed/topped up.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "/api/payments/status/{session_id}", "issue": "Returns 502 immediately after a checkout is created. Upstream Emergent Stripe proxy returns 404 'No such checkout.session: cs_test_...' for sessions just created via /api/payments/checkout. Probably a propagation/test-mode issue in the Emergent Stripe wrapper. Checkout creation itself works fine (URL + session_id returned, txn record persisted)."},
+      {"endpoint": "/app/backend/.env", "issue": "FIXED. Line 3 had `CORS_ORIGINS=\"*\"JWT_SECRET=\"...\"` on a single line — dotenv never set JWT_SECRET → register/login/me/refresh all crashed with KeyError: 'JWT_SECRET' returning 500. Added a newline."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "NewDoubt Step 2 (triage result)", "issue": "Because the LLM key is over budget, users see 'AI triage failed: ... Budget has been exceeded ...' rendered as the answer with 0% confidence. UI handles it but it leaks an internal error string. Consider catching errors with confidence=0.0 server-side and rendering a friendlier 'AI is unavailable, skipping to human match' state on the client.", "selector": "[data-testid='doubt-step-2-result']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Top up / renew EMERGENT_LLM_KEY so Claude Sonnet 4.5 triage returns real answers (currently every triage returns the 'Budget has been exceeded' fallback with 0% confidence).",
+    "Investigate Emergent Stripe proxy 404 on /api/payments/status/{session_id} immediately after creation. Either (a) the test-mode key/region mismatch, or (b) add a small retry/grace window in the status endpoint and surface a friendlier message instead of bubbling 502.",
+    "(Optional UX) When triage fails, return a structured `error: true` flag so the frontend can show a clean 'AI unavailable — get a human now' state rather than printing the litellm error string."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/.env had a fatal newline-missing bug between CORS_ORIGINS and JWT_SECRET — fixed. Add a CI/lint check or a startup assert for required env keys (JWT_SECRET, MONGO_URL, EMERGENT_LLM_KEY, STRIPE_API_KEY) so misconfig fails loudly instead of returning 500 per request.",
+    "/app/backend/doubts.py::_run_triage swallows exceptions into the answer string. When the LLM fails, surface a typed error or a 503, so the UI can render a clean fallback rather than printing the litellm error verbatim.",
+    "CORS allow_list in server.py only includes FRONTEND_URL + localhost:3000. CORS_ORIGINS env var is ignored. Minor inconsistency.",
+    "TutorApply form is missing a 'specialties' input in the rendered form (only name/email/years/linkedin/pitch are present), but the backend POST /api/tutors/apply requires `specialties: List[str]`. Verify the frontend actually sends this — otherwise applications will 422.",
+    "Triage fallback returns confidence=0.0 + suggested_tier='deep' on errors; tests can't distinguish a real 0-confidence answer from a transport error. Consider adding `error: bool` to TriageResult."
+  ],
+  "updated_files": [
+    "/app/backend/.env",
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "95% (19/20 tests passing — payment status check failing due to Emergent Stripe upstream)", "frontend": "90% — all pages render, all flows work end-to-end, but AI triage shows fallback error string due to LLM budget"},
+  "test_credentials": "Admin: admin@unstuck.dev / Admin123! (verified working). New students can be registered freely.",
+  "seed_data_creation": "Multiple TEST_ prefixed students were registered during testing (left in DB). Tutor application 'TEST Applicant' submitted. Several test doubts and one matched session created and ended.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Backend env fix (JWT_SECRET) is already applied — backend is up and most tests pass. The remaining critical issue is the LLM key budget — once that is fixed, re-run /app/backend/tests/backend_test.py and re-test the frontend /doubts/new flow to confirm a real Claude answer appears with non-zero confidence. The Stripe checkout status 502 may be an Emergent Stripe proxy issue and is independent of code.",
+  "rca_of_the_issue": "Root cause of the original 500 on register/login: /app/backend/.env had `CORS_ORIGINS=\"*\"JWT_SECRET=\"...\"` on a single line so python-dotenv parsed CORS_ORIGINS as `\"*\"JWT_SECRET=\"...\"` and never set JWT_SECRET. Reproduction: POST /api/auth/register with any payload → 500. Stack: KeyError: 'JWT_SECRET' at auth.py::_secret. Fix: split into two lines. Verified via supervisor restart + curl + 19 passing pytest tests."
+}
