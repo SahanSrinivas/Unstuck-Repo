@@ -85,11 +85,13 @@ async def list_messages(session_id: str, user: dict = Depends(get_current_user))
 async def session_chat(ws: WebSocket, session_id: str) -> None:
     user = await _user_from_ws(ws)
     if not user:
+        await ws.accept()
         await ws.close(code=4401)
         return
 
     sess = await db.sessions.find_one({"id": session_id, "user_id": user["_id"]}, {"_id": 0})
     if not sess:
+        await ws.accept()
         await ws.close(code=4404)
         return
 
