@@ -251,7 +251,7 @@ function Step3({ doubtId, suggestedTier, onDone }) {
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    api.get("/tutors").then(({ data }) => setTutors(data || [])).catch(() => {});
+    api.get("/tutors").then(({ data }) => setTutors(data || [])).catch((e) => console.warn("tutors load failed", e));
   }, []);
 
   const tierObj = TIERS.find((t) => t.key === tier);
@@ -267,7 +267,10 @@ function Step3({ doubtId, suggestedTier, onDone }) {
       // also pre-create a session record so dashboard reflects it
       try {
         await api.post(`/doubts/${doubtId}/match`, { doubt_id: doubtId, tier, tutor_id: tutorId });
-      } catch {/* matching is also created post-pay if needed */}
+      } catch (matchErr) {
+        // matching is also created post-pay if needed
+        console.warn("pre-match failed (will retry post-pay)", matchErr);
+      }
       window.location.href = data.url;
     } catch (e) {
       setErr(formatApiErrorDetail(e.response?.data?.detail) || e.message);

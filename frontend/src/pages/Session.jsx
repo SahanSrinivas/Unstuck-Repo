@@ -24,7 +24,7 @@ export default function Session() {
       setMessages([
         { role: "tutor", body: `Hi — I'm ${data.tutor_name}. I read your doubt. Let's start with the chunker config you mentioned.`, ts: new Date().toISOString() },
       ]);
-    }).catch(() => {});
+    }).catch((e) => console.warn("session load failed", e));
     return () => { cancelled = true; };
   }, [id]);
 
@@ -45,7 +45,7 @@ export default function Session() {
   };
 
   const endSession = async () => {
-    try { await api.post(`/sessions/${id}/end`); } catch {}
+    try { await api.post(`/sessions/${id}/end`); } catch (e) { console.warn("end-session failed", e); }
     navigate("/dashboard");
   };
 

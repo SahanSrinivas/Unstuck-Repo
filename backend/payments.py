@@ -12,7 +12,7 @@ router = APIRouter(tags=["payments"])
 
 
 def _db():
-    from server import db
+    from database import db
     return db
 
 
@@ -57,10 +57,13 @@ async def create_checkout(body: CheckoutRequest, http_request: Request, user: di
         success_url=success_url, cancel_url=cancel_url,
         metadata=metadata,
     )
+    session = None
     try:
         session = await stripe.create_checkout_session(req)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Stripe error: {str(e)[:200]}")
+    if session is None:
+        raise HTTPException(status_code=502, detail="Stripe returned no session")
 
     txn = {
         "id": f"txn-{uuid.uuid4().hex[:10]}",
@@ -88,10 +91,13 @@ async def checkout_status(session_id: str, http_request: Request, user: dict = D
         return {"payment_status": "paid", "status": "complete", "amount": txn["amount"]}
 
     stripe = _get_stripe(http_request)
+    s = None
     try:
         s = await stripe.get_checkout_status(session_id)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Stripe error: {str(e)[:200]}")
+    if s is None:
+        raise HTTPException(status_code=502, detail="Stripe returned no status")
 
     update = {"payment_status": s.payment_status, "status": s.status}
     await _db().payment_transactions.update_one({"session_id": session_id}, {"$set": update})

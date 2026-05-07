@@ -41,7 +41,7 @@ export default function Dashboard() {
           setInsight(i.data || null);
         }
       } catch (e) {
-        // silent — fresh accounts have no data
+        console.warn("dashboard load failed", e);
       } finally {
         if (!cancelled) setLoading(false);
       }

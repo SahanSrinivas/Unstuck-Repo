@@ -18,7 +18,7 @@ router = APIRouter(tags=["doubts"])
 
 
 def _db():
-    from server import db
+    from database import db
     return db
 
 

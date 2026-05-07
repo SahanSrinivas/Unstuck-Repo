@@ -9,12 +9,8 @@ import os
 import logging
 from fastapi import FastAPI, APIRouter
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 
-# DB
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+from database import db, close as close_db
 
 # App
 app = FastAPI(title="Unstuck API")
@@ -23,16 +19,16 @@ api_router = APIRouter(prefix="/api")
 
 
 @api_router.get("/")
-async def root():
+async def root() -> dict:
     return {"service": "unstuck", "ok": True}
 
 
 @api_router.get("/healthz")
-async def healthz():
+async def healthz() -> dict:
     return {"ok": True}
 
 
-# Include feature routers (imported AFTER db is defined so late-binding works)
+# Feature routers
 from auth import router as auth_router, seed_admin  # noqa: E402
 from doubts import router as doubts_router  # noqa: E402
 from payments import router as payments_router  # noqa: E402
@@ -46,10 +42,9 @@ app.include_router(api_router)
 
 # CORS
 frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-allow_list = [frontend_url, "http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_list,
+    allow_origins=[frontend_url, "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,7 +55,7 @@ logger = logging.getLogger("unstuck")
 
 
 @app.on_event("startup")
-async def on_startup():
+async def on_startup() -> None:
     await db.users.create_index("email", unique=True)
     await db.doubts.create_index("user_id")
     await db.sessions.create_index("user_id")
@@ -73,5 +68,5 @@ async def on_startup():
 
 
 @app.on_event("shutdown")
-async def on_shutdown():
-    client.close()
+async def on_shutdown() -> None:
+    close_db()

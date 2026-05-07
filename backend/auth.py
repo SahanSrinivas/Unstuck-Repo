@@ -70,8 +70,8 @@ def _user_to_public(doc: dict) -> UserPublic:
 
 
 def get_db_dep():
-    """Late-binding DB dependency – returns the live db handle from server module."""
-    from server import db
+    """Return the shared MongoDB handle."""
+    from database import db
     return db
 
 
