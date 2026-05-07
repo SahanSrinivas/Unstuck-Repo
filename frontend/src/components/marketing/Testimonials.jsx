@@ -34,8 +34,8 @@ export default function Testimonials() {
           <h2 className="u-h2 mt-4">From engineers who got unstuck</h2>
         </div>
         <div className="mt-12 grid md:grid-cols-3 gap-5">
-          {QUOTES.map((q, i) => (
-            <div key={i} className="u-card u-card-hover" data-testid={`testimonial-${i}`}>
+          {QUOTES.map((q) => (
+            <div key={`${q.name}-${q.role}`} className="u-card u-card-hover" data-testid={`testimonial-${q.avatar}`}>
               <Quote size={22} strokeWidth={1.75} className="text-purple-primary" />
               <p className="u-body mt-4 text-ink">{q.body}</p>
               <div className="mt-6 flex items-center gap-3">

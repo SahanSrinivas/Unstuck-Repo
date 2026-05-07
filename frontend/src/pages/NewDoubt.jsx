@@ -8,6 +8,17 @@ import api, { formatApiErrorDetail } from "../lib/api";
 
 const TOPIC_OPTIONS = ["RAG", "Agents", "Fine-tuning", "MLOps", "Prompting", "Evals"];
 
+const MONACO_OPTIONS = {
+  minimap: { enabled: false },
+  fontSize: 13,
+  fontFamily: "JetBrains Mono, monospace",
+  lineNumbers: "on",
+  scrollBeyondLastLine: false,
+  wordWrap: "on",
+  padding: { top: 12, bottom: 12 },
+  automaticLayout: true,
+};
+
 function Stepper({ step }) {
   const steps = ["Describe", "AI tries first", "Match & pay"];
   return (
@@ -61,16 +72,7 @@ function Step1({ value, onChange, onContinue }) {
               value={value.code}
               onChange={(v) => onChange({ ...value, code: v ?? "" })}
               theme="vs-dark"
-              options={{
-                minimap: { enabled: false },
-                fontSize: 13,
-                fontFamily: "JetBrains Mono, monospace",
-                lineNumbers: "on",
-                scrollBeyondLastLine: false,
-                wordWrap: "on",
-                padding: { top: 12, bottom: 12 },
-                automaticLayout: true,
-              }}
+              options={MONACO_OPTIONS}
             />
           </div>
         </div>

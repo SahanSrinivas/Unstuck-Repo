@@ -22,7 +22,22 @@ export default function SavedTutors() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [s, a] = await Promise.all([api.get("/saved-tutors"), api.get("/tutors")]);
+        if (cancelled) return;
+        setSaved(s.data || []);
+        setAll(a.data || []);
+      } catch (e) {
+        console.warn("saved-tutors load failed", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const savedIds = new Set(saved.map((t) => t.id));
 

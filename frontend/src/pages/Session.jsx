@@ -5,6 +5,17 @@ import Editor from "@monaco-editor/react";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import api, { formatApiErrorDetail } from "../lib/api";
 
+const SESSION_MONACO_OPTIONS = {
+  minimap: { enabled: false },
+  fontSize: 13.5,
+  fontFamily: "JetBrains Mono, monospace",
+  lineNumbers: "on",
+  scrollBeyondLastLine: false,
+  wordWrap: "on",
+  padding: { top: 16, bottom: 16 },
+  automaticLayout: true,
+};
+
 function ResolutionModal({ open, onClose, onResolve, submitting }) {
   if (!open) return null;
   return (
@@ -207,16 +218,7 @@ export default function Session() {
               value={code}
               onChange={(v) => setCode(v ?? "")}
               theme="vs-dark"
-              options={{
-                minimap: { enabled: false },
-                fontSize: 13.5,
-                fontFamily: "JetBrains Mono, monospace",
-                lineNumbers: "on",
-                scrollBeyondLastLine: false,
-                wordWrap: "on",
-                padding: { top: 16, bottom: 16 },
-                automaticLayout: true,
-              }}
+              options={SESSION_MONACO_OPTIONS}
             />
           </div>
         </div>

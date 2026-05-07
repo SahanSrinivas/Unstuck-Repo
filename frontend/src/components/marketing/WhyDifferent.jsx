@@ -51,8 +51,8 @@ export default function WhyDifferent() {
                 </tr>
               </thead>
               <tbody>
-                {ROWS.map((r, i) => (
-                  <tr key={i} className="border-t border-line">
+                {ROWS.map((r) => (
+                  <tr key={r[0]} className="border-t border-line">
                     <td className="p-5 u-body font-medium text-ink">{r[0]}</td>
                     <td className="p-5"><Cell on={r[1]} /></td>
                     <td className="p-5"><Cell on={r[2]} /></td>
