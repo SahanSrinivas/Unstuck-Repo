@@ -2,7 +2,7 @@
 import os
 import json
 import uuid
-import random
+import secrets
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
@@ -16,6 +16,8 @@ from auth import get_current_user
 from seeds import TIERS
 
 router = APIRouter(tags=["doubts"])
+
+_rng = secrets.SystemRandom()
 
 
 def _db():
@@ -193,7 +195,7 @@ async def match_tutor(doubt_id: str, body: MatchRequest, user: dict = Depends(ge
         candidates = await _db().tutors.find({"available": True}, {"_id": 0}).to_list(50)
         scored = []
         for t in candidates:
-            score = len(topics_set & set([s.lower() for s in t.get("specialties", [])])) + random.random() * 0.3
+            score = len(topics_set & set([s.lower() for s in t.get("specialties", [])])) + _rng.random() * 0.3
             scored.append((score, t))
         scored.sort(reverse=True, key=lambda x: x[0])
         tutor = scored[0][1] if scored else None

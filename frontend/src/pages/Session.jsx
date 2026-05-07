@@ -176,7 +176,7 @@ export default function Session() {
     };
 
     return () => {
-      try { ws.close(); } catch {/* noop */}
+      try { ws.close(); } catch (e) { console.warn("ws close failed", e); }
     };
   }, [id]);
 
