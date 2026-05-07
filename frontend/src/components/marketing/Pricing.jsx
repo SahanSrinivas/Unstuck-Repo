@@ -41,14 +41,15 @@ export const TIERS = [
   },
   {
     key: "project",
-    label: "Project Help",
+    label: "Production Triage",
     minutes: 60,
     price: 60,
     items: [
-      "Architecture review",
-      "Eval / harness sketch",
-      "Written summary + plan",
+      "Walk through your incident with a senior practitioner",
+      "Review eval set, traces, logs",
+      "Written summary + remediation plan",
       "Resolved or refund",
+      "NDA available on request",
     ],
   },
 ];

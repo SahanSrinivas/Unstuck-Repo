@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Database, Zap, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, Zap, ShieldCheck } from "lucide-react";
 
 export default function Hero() {
   return (
@@ -9,16 +9,20 @@ export default function Hero() {
         <div className="u-stagger">
           <span className="u-pill" data-testid="hero-eyebrow">AI engineering help, on demand</span>
           <h1 className="u-h1 mt-6" data-testid="hero-title">
-            Real AI engineers.<br />In 5 minutes.
+            Your AI is in production.<br />And it's silently degrading.
           </h1>
+          <p className="u-small mt-4 text-ink-muted italic" data-testid="hero-tagline">
+            For when the eval looked fine but production didn't.
+          </p>
           <p className="u-body-lg mt-6 max-w-[560px]" data-testid="hero-sub">
-            Stuck on RAG, agents, or fine-tuning? Skip the Stack Overflow wait
-            and the ChatGPT hallucinations. Get a verified AI engineer on a
-            15-minute call. Fixed price. No monthly commitment.
+            Recall dropped 12 points after the last reranker swap. Agent loops on
+            a tool call nobody noticed. Hallucinations passing eval but failing
+            customers. Get a verified AI engineer on a call in 5 minutes — before
+            the next regression hits prod.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3" data-testid="hero-ctas">
             <Link to="/register" className="u-btn-primary" data-testid="hero-cta-primary">
-              Submit your first doubt <ArrowRight size={18} strokeWidth={1.75} />
+              Submit a production issue <ArrowRight size={18} strokeWidth={1.75} />
             </Link>
             <Link to="/tutor-apply" className="u-btn-secondary" data-testid="hero-cta-secondary">
               I'm an AI engineer — apply to tutor
@@ -27,18 +31,22 @@ export default function Hero() {
           <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 u-caption">
             <span className="inline-flex items-center gap-1.5"><Check size={14} strokeWidth={2} className="text-purple-primary" />First AI attempt is free</span>
             <span className="inline-flex items-center gap-1.5"><Check size={14} strokeWidth={2} className="text-purple-primary" />Auto-refund if unresolved</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={14} strokeWidth={2} className="text-purple-primary" />Verified practitioners only</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={14} strokeWidth={2} className="text-purple-primary" />Practitioners who've shipped at scale</span>
           </div>
         </div>
 
         {/* Stacked card stack illustration */}
         <div className="relative h-[420px] hidden lg:block" data-testid="hero-card-stack" aria-hidden>
           <div className="absolute right-12 top-2 w-[360px] u-card shadow-sm rotate-[-3deg]">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
               <span className="w-2 h-2 rounded-full bg-bad" />
               <span className="w-2 h-2 rounded-full bg-warn" />
               <span className="w-2 h-2 rounded-full bg-good" />
-              <span className="ml-3 u-caption">Doubt #182 — RAG recall@5 dropped</span>
+              <span className="ml-3 u-caption">Doubt #182</span>
+              <span className="inline-flex items-center gap-1.5 u-pill !bg-bad/10 !text-bad text-[11px] !py-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-bad animate-pulse" />
+                Production incident
+              </span>
             </div>
             <div className="font-mono text-[12.5px] leading-7 text-ink-muted">
               <div><span className="text-purple-primary">retriever</span>.search(query, k=5)</div>

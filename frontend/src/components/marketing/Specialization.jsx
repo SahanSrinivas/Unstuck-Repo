@@ -2,9 +2,11 @@ import React from "react";
 
 const ROWS = [
   {
-    title: "RAG & retrieval",
+    title: "Retrieval regressions in production",
     body:
-      "Recall in the gutter? Reranking thrashing? Chunk strategy is voodoo? Get someone who's shipped retrieval at scale to look at your eval set with you.",
+      "Recall dropped after a chunker change. Reranker thrashing on a query class nobody tested. Vector DB recall is fine but latency spiked 4x. Get someone who's debugged retrieval at production scale to look at your eval and traces.",
+    example:
+      "Recall@5 on multi-hop queries went from 0.78 → 0.41 after we moved to semantic chunking. Aria spotted that we'd lost punctuation-aware splitting, fixed it in 18 minutes.",
     code: `# eval recall@5 across chunkers
 for chunker in [token_512, sentence, semantic]:
     recall = run_eval(chunker, queries, gold)
@@ -14,9 +16,11 @@ for chunker in [token_512, sentence, semantic]:
 # semantic    0.78  <— actually try this`,
   },
   {
-    title: "Agents & tool use",
+    title: "Agents misbehaving in prod",
     body:
-      "Agents looping. Tools returning the wrong arg shape. Planner over-thinking simple tasks. Skip the framework debates — get a fix.",
+      "Tool-call schema drift. Loops on edge cases your eval didn't catch. Latency creeping past SLA on multi-step plans. Hallucinated tool args breaking downstream services. Get a fix, not a framework debate.",
+    example:
+      "Our LangGraph agent was retrying a deprecated tool name 3% of the time. Killed two nodes, fixed the schema, latency dropped 40%.",
     code: `# tool spec mismatch — most common agent bug
 def get_user(user_id: int) -> User: ...
 # but the LLM keeps calling:
@@ -25,9 +29,11 @@ def get_user(user_id: int) -> User: ...
 # OR strict tool schemas (function calling)`,
   },
   {
-    title: "Fine-tuning & training",
+    title: "Fine-tuning regressions",
     body:
-      "Loss curve looks fine but eval is worse. LoRA rank too high? Distillation underperforming? Talk to someone who's trained 30+ models.",
+      "Eval improved but real-world quality dropped. Distilled model failing safety checks the base model passed. LoRA merge changed the policy in ways your test set didn't catch. Get someone who's shipped 30+ models to debug it with you.",
+    example:
+      "Post-DPO model started refusing safe queries. Reward hacking on the preference data — caught in one session.",
     code: `# LoRA defaults that actually work for 7-13B
 lora_rank      = 16
 lora_alpha     = 32           # 2x rank
@@ -36,9 +42,11 @@ learning_rate  = 2e-4         # higher than full FT
 # SFT on instruction data → DPO on prefs → ship`,
   },
   {
-    title: "MLOps & deployment",
+    title: "Inference cost & latency in production",
     body:
-      "vLLM vs TGI. Batch sizes. KV-cache. Spot instances. Cold starts that wreck your p95. Get unstuck on the boring-but-expensive stuff.",
+      "p95 latency wrecking your SLO. Cold starts on serverless killing UX. KV-cache hits suddenly tanking after a deploy. vLLM batch sizing eating your margin. Talk to someone who's tuned production inference at scale.",
+    example:
+      "Cost per request 3x'd overnight after a model swap. Continuous batching wasn't engaging — fixed the request shape, costs dropped back.",
     code: `# inference cost cliff at batch_size=1
 # vLLM continuous batching → 4-8x throughput
 vllm serve mistral-7b-instruct \\
@@ -81,6 +89,12 @@ export default function Specialization() {
                 <div className={codeFirst ? "md:order-2" : ""}>
                   <h3 className="u-h3">{r.title}</h3>
                   <p className="u-body-lg mt-4">{r.body}</p>
+                  <p
+                    className="u-small italic mt-4 text-ink-muted border-l-2 border-purple-primary/40 pl-4"
+                    data-testid={`spec-example-${i}`}
+                  >
+                    "{r.example}"
+                  </p>
                 </div>
                 <div className={codeFirst ? "md:order-1" : ""}>
                   <CodeBlock code={r.code} />
