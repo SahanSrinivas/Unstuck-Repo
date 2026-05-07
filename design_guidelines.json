@@ -1,0 +1,149 @@
+{
+  "theme": "light",
+  "archetype": "Swiss & Soft Utility Hybrid (Heroku-style)",
+  "instructions_to_main_agent": "Implement EXACTLY the colors, spacing, and typography specified. Do NOT add dark mode overrides if they conflict with the specified color palette. Use pure HTML/Tailwind for marketing pages and Shadcn components for dashboard (heavily customized to match the spacing and border radius defined here). Add data-testid to all interactive and informational elements. Follow the anti-patterns strictly: NO 3D blobs, NO glassmorphism, NO drop-shadow glow, NO emojis in headers.",
+  "colors": {
+    "primary": "#5A1BA9",
+    "primary_dark": "#3C0F77",
+    "primary_light": "#7B3FD9",
+    "primary_soft": "#EFE7FB",
+    "bg": "#FFFFFF",
+    "bg_alt": "#F7F5FB",
+    "surface": "#FFFFFF",
+    "border": "#E5E1EE",
+    "text": "#1C1033",
+    "text_muted": "#5C5478",
+    "text_soft": "#8E87A6",
+    "success": "#2E7D5B",
+    "warning": "#C77A0E",
+    "danger": "#C0392B",
+    "info": "#2563EB"
+  },
+  "typography": {
+    "fonts": {
+      "headlines": "Outfit, sans-serif",
+      "body": "Inter, sans-serif",
+      "code": "JetBrains Mono, monospace"
+    },
+    "font_weights": {
+      "h1": 700,
+      "h2": 600,
+      "h3": 600,
+      "h4": 500,
+      "body_regular": 400,
+      "body_medium": 500,
+      "body_semibold": 600
+    },
+    "scale": {
+      "h1": { "size": "56px", "line_height": "1.05", "letter_spacing": "-0.02em" },
+      "h2": { "size": "40px", "line_height": "1.15", "letter_spacing": "-0.01em" },
+      "h3": { "size": "28px", "line_height": "1.25", "letter_spacing": "normal" },
+      "h4": { "size": "20px", "line_height": "1.35", "letter_spacing": "normal" },
+      "body_lg": { "size": "18px", "line_height": "1.6", "letter_spacing": "normal" },
+      "body": { "size": "16px", "line_height": "1.6", "letter_spacing": "normal" },
+      "small": { "size": "14px", "line_height": "1.5", "letter_spacing": "normal" },
+      "caption": { "size": "13px", "line_height": "1.4", "letter_spacing": "normal" }
+    }
+  },
+  "layout_and_spacing": {
+    "max_width": "1200px",
+    "section_padding": {
+      "desktop": "120px",
+      "mobile": "64px"
+    },
+    "card_padding": {
+      "desktop": "32px",
+      "mobile": "24px"
+    },
+    "border_radius": {
+      "card": "12px",
+      "button": "8px",
+      "input": "6px",
+      "pill": "9999px"
+    }
+  },
+  "components": {
+    "primary_button": {
+      "background": "#5A1BA9",
+      "text": "#FFFFFF",
+      "padding": "14px 28px",
+      "border_radius": "8px",
+      "hover": {
+        "background": "#3C0F77",
+        "scale": "none",
+        "glow": "none",
+        "shadow": "none"
+      }
+    },
+    "secondary_button": {
+      "background": "transparent",
+      "text": "#5A1BA9",
+      "border": "1.5px solid #5A1BA9",
+      "padding": "14px 28px",
+      "border_radius": "8px"
+    },
+    "cards": {
+      "background": "#FFFFFF",
+      "border": "1px solid #E5E1EE",
+      "border_radius": "12px",
+      "hover": "lift slightly with shadow-md"
+    },
+    "pills_badges": {
+      "background": "#EFE7FB",
+      "text": "#5A1BA9",
+      "padding": "4px 12px",
+      "border_radius": "9999px",
+      "font": "Inter 500 13px"
+    },
+    "inputs": {
+      "border": "1px solid #E5E1EE",
+      "border_radius": "6px",
+      "padding": "12px 16px",
+      "focus": {
+        "border": "1px solid #5A1BA9",
+        "ring": "3px solid #EFE7FB"
+      }
+    },
+    "iconography": {
+      "library": "lucide-react",
+      "stroke_width": 1.75,
+      "color": "inherit or #5A1BA9"
+    }
+  },
+  "anti_patterns": [
+    "No bright multi-color gradients (purple→pink→orange)",
+    "No glass-morphism or heavy blurs",
+    "No 3D blob illustrations or AI-stock images",
+    "No emoji in section headlines",
+    "No 'Powered by AI ✨' sparkle clichés",
+    "No purple drop-shadows or glows on buttons",
+    "No font sizes smaller than 13px",
+    "No horizontal scrolling tables on desktop",
+    "No background videos in hero"
+  ],
+  "testing": {
+    "requirement": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case."
+  },
+  "media_urls": {
+    "hero_card_stack": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/22cee771-b9a3-40a8-951f-32c76e953a56/images/03fea90b4fa34eaa15116337c2cd460c8a90b7abb4be852309024974dc07f458.png",
+      "description": "Flat 2D vector illustration of a stack of code editor windows and database nodes, monochromatic deep purple and white.",
+      "category": "hero_visual"
+    },
+    "code_mlops_thumbnail": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/22cee771-b9a3-40a8-951f-32c76e953a56/images/09b67e3f61694300de10a140a063474c4ceebf87fa21464175814e98d84f456a.png",
+      "description": "Minimal flat vector illustration of a cloud architecture pipeline and database nodes in purple and white.",
+      "category": "feature_thumbnail"
+    },
+    "avatar_geometric_1": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/22cee771-b9a3-40a8-951f-32c76e953a56/images/b6bfd45403d7f94c025786fe0123a9409624e8986bea3f2d863945048ae9c87b.png",
+      "description": "Abstract geometric portrait placeholder avatar, deep purple and soft lavender, no human face.",
+      "category": "avatar_placeholder"
+    },
+    "avatar_geometric_2": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/22cee771-b9a3-40a8-951f-32c76e953a56/images/b1107fdba66bf2fcbd46c118cc1d23942ab723a4d84cac0056125c9b910ae19e.png",
+      "description": "Abstract geometric portrait placeholder avatar, different minimalist shapes.",
+      "category": "avatar_placeholder"
+    }
+  }
+}
